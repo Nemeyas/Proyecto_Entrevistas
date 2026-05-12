@@ -10,6 +10,7 @@ from deepface import DeepFace
 from google import genai
 
 # Configura tu cliente con la API Key
+client = genai.Client(api_key="APY KEY")
 
 # Variable global para recordar la emoción
 ultima_emocion_detectada = "neutral"
