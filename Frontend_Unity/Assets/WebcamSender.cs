@@ -13,37 +13,44 @@ public class RespuestaPython
     public string respuesta_ia;
 }
 
+[System.Serializable]
+public class RespuestaServidorAudio
+{
+    public string status;
+    public string transcripcion;
+    public string respuesta_ia;
+}
+
 public class WebcamSender : MonoBehaviour
 {
-    // --- VARIABLES DE CÁMARA ---
     WebCamTexture webcamTexture;
     public string serverURL_Emocion = "http://localhost:8000/analizar_emocion";
-    public string serverURL_Audio = "http://localhost:8000/procesar_audio"; // Nueva ruta para el LLM
+    public string serverURL_Audio = "http://localhost:8000/procesar_audio";
     public RawImage pantallaCamara;
     public TextMeshProUGUI textoEmocion; 
-    public TextMeshProUGUI textoEntrevistador;
-
-    // --- VARIABLES DE AUDIO ---
-    public TextMeshProUGUI textoDelBoton; // Para avisarte cuando está grabando
+    
+    public TextMeshProUGUI textoDelBoton; 
     private AudioClip clipGrabado;
     private bool estaGrabando = false;
+    
+    public GestorChat miGestorDeChat;
 
     void Start()
     {
-        // 1. Iniciar Cámara
         webcamTexture = new WebCamTexture();
         if (pantallaCamara != null) pantallaCamara.texture = webcamTexture;
         webcamTexture.Play();
-        
-        if (textoEntrevistador != null) 
-            textoEntrevistador.text = "Hola, bienvenido a la entrevista. Háblame de un desafío que hayas superado.";
+
+        // --- ¡AQUÍ ESTÁ LA MAGIA DEL SALUDO INICIAL! ---
+        if (miGestorDeChat != null)
+        {
+            miGestorDeChat.AgregarMensajeLog("Entrevistador", "Hola, bienvenido a la entrevista. Háblame de un desafío que hayas superado.", "#FFA500");
+        }
+        // -----------------------------------------------
 
         StartCoroutine(EnviarFotoRutinariamente());
     }
 
-    // ==========================================
-    // SECCIÓN 1: FOTO Y EMOCIÓN (Lo que ya funciona)
-    // ==========================================
     IEnumerator EnviarFotoRutinariamente()
     {
         while (true)
@@ -84,27 +91,20 @@ public class WebcamSender : MonoBehaviour
         }
     }
 
-    // ==========================================
-    // SECCIÓN 2: GRABACIÓN DE MICRÓFONO (NUEVO)
-    // ==========================================
-    
-    // Esta es la función que conectaremos al botón
     public void AlternarGrabacion()
     {
         if (!estaGrabando)
         {
-            // Empezar a grabar (máximo 15 segundos)
             estaGrabando = true;
-            textoDelBoton.text = "🔴 Grabando... (Click para detener)";
+            textoDelBoton.text = "🔴 Grabando...";
             textoDelBoton.color = Color.red;
             clipGrabado = Microphone.Start(null, false, 15, 44100);
         }
         else
         {
-            // Detener y enviar
             estaGrabando = false;
             Microphone.End(null);
-            textoDelBoton.text = "⏳ Enviando a IA...";
+            textoDelBoton.text = "⏳ Enviando...";
             textoDelBoton.color = Color.yellow;
             
             StartCoroutine(EnviarAudioAlServidor());
@@ -113,7 +113,6 @@ public class WebcamSender : MonoBehaviour
 
     IEnumerator EnviarAudioAlServidor()
     {
-        // Convertimos el audio de Unity a un archivo .wav real
         byte[] wavBytes = ConvertirAWav(clipGrabado);
         
         WWWForm form = new WWWForm();
@@ -126,25 +125,23 @@ public class WebcamSender : MonoBehaviour
             if (www.result == UnityWebRequest.Result.Success)
             {
                 string jsonString = www.downloadHandler.text;
-                RespuestaPython respuesta = JsonUtility.FromJson<RespuestaPython>(jsonString);
+                RespuestaServidorAudio respuestaAudio = JsonUtility.FromJson<RespuestaServidorAudio>(jsonString);
                 
-                // Imprimimos en consola y actualizamos el texto del entrevistador en pantalla
-                Debug.Log("Python respondió: " + respuesta.respuesta_ia);
-                if (textoEntrevistador != null && respuesta.respuesta_ia != null)
+                if (respuestaAudio.status == "exito")
                 {
-                    textoEntrevistador.text = respuesta.respuesta_ia;
+                    if (miGestorDeChat != null)
+                    {
+                        // Ahora TODO se va directo al muro
+                        miGestorDeChat.ActualizarConversacion(respuestaAudio.transcripcion, respuestaAudio.respuesta_ia);
+                    }
                 }
             }
 
-            // Restaurar el botón
             textoDelBoton.text = "Hablar";
             textoDelBoton.color = Color.black;
         }
     }
 
-    // ==========================================
-    // FUNCIÓN DE AYUDA: CONVERTIR A WAV (No tocar)
-    // ==========================================
     byte[] ConvertirAWav(AudioClip clip)
     {
         MemoryStream stream = new MemoryStream();

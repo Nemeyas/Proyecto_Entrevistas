@@ -10,7 +10,6 @@ from deepface import DeepFace
 from google import genai
 
 # Configura tu cliente con la API Key
-client = genai.Client(api_key="TU_API_KEY_AQUI")
 
 # Variable global para recordar la emoción
 ultima_emocion_detectada = "neutral"
@@ -70,15 +69,15 @@ async def procesar_audio(audio: UploadFile = File(...)):
             prompt_sistema = f"""
             Eres un reclutador experto en Ingeniería Informática de una empresa top.
             
-            CONTEXTO DEL CANDIDATO:
+            CONTEXTO EN TIEMPO REAL DEL CANDIDATO:
             - Lo que acaba de decir: "{texto_transcrito}"
-            - Su expresión facial actual es: "{ultima_emocion_detectada}"
+            - Su emoción facial detectada en este milisegundo es: "{ultima_emocion_detectada}"
             
-            INSTRUCCIONES:
-            1. Si la expresión es 'sad' o 'fear', muestra empatía.
-            2. Evalúa su respuesta técnicamente si es necesario.
-            3. Responde de forma muy breve (máximo 2 líneas cortas).
-            4. Termina siempre con una nueva pregunta de entrevista.
+            INSTRUCCIONES ESTRICTAS:
+            1. OBLIGATORIO: Inicia tu respuesta haciendo un comentario directo pero profesional sobre su emoción (Ej: Si es 'happy' nota su entusiasmo, si es 'fear' o 'sad' dale calma, si es 'neutral' valora su serenidad, etc).
+            2. Evalúa brevemente lo que te acaba de decir.
+            3. Termina siempre con una nueva pregunta técnica o situacional.
+            4. Sé conciso, máximo 3 o 4 líneas.
             """
             
             # Así se llama al modelo en la librería nueva
