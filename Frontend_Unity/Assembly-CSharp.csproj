@@ -49,6 +49,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\GestorChat.cs" />
+    <Compile Include="Assets\EntrevistadorAnimator.cs" />
     <Compile Include="Assets\WebcamSender.cs" />
   </ItemGroup>
   <ItemGroup>

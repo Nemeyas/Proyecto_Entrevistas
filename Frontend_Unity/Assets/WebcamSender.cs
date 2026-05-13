@@ -34,6 +34,7 @@ public class WebcamSender : MonoBehaviour
     private bool estaGrabando = false;
     
     public GestorChat miGestorDeChat;
+    public EntrevistadorAnimator miEntrevistadorAnimator;
 
     void Start()
     {
@@ -110,6 +111,12 @@ public class WebcamSender : MonoBehaviour
                             textoEmocion.text = $"Emoción: {respuesta.emocion.ToUpper()} {emoji}";
                             textoEmocion.color = color;
                         }
+
+                        // Hacer que el entrevistador 3D reaccione a la emoción
+                        if (miEntrevistadorAnimator != null)
+                        {
+                            miEntrevistadorAnimator.ReaccionarAEmocion(respuesta.emocion);
+                        }
                     }
                 }
                 Destroy(photo);
@@ -159,6 +166,12 @@ public class WebcamSender : MonoBehaviour
                     {
                         // Ahora TODO se va directo al muro
                         miGestorDeChat.ActualizarConversacion(respuestaAudio.transcripcion, respuestaAudio.respuesta_ia);
+                    }
+
+                    // Activar animación de habla del entrevistador 3D
+                    if (miEntrevistadorAnimator != null)
+                    {
+                        miEntrevistadorAnimator.ActivarHabla();
                     }
                 }
             }
