@@ -1,4 +1,5 @@
 import io
+import os
 import speech_recognition as sr
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
@@ -8,9 +9,19 @@ from deepface import DeepFace
 
 # --- NUEVA LIBRERÍA DE GOOGLE ---
 from google import genai
+from dotenv import load_dotenv
 
-# Configura tu cliente con la API Key
-client = genai.Client(api_key="APY KEY")
+# Cargar la API Key desde el archivo .env (asi no se sube a GitHub)
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key or api_key == "PONER_TU_API_KEY_AQUI":
+    print("=" * 50)
+    print("ERROR: No se encontro la API Key de Gemini.")
+    print("Crea un archivo .env en Backend_Python/ con:")
+    print('  GEMINI_API_KEY=tu_clave_aqui')
+    print("=" * 50)
+
+client = genai.Client(api_key=api_key or "")
 
 # Variable global para recordar la emoción
 ultima_emocion_detectada = "neutral"
@@ -103,3 +114,20 @@ async def procesar_audio(audio: UploadFile = File(...)):
     except Exception as e:
         print(f"❌ Error en audio: {e}")
         return JSONResponse(content={"status": "error", "respuesta_ia": "Hubo un error de conexión, continuemos."})
+
+
+# ==========================================
+# ARRANQUE AUTOMÁTICO DEL SERVIDOR
+# ==========================================
+if __name__ == "__main__":
+    import sys
+    import uvicorn
+    # Forzar UTF-8 para que los emojis del código no rompan la consola de Windows
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    print("=" * 50)
+    print(">>> Servidor de Entrevista IA iniciandose...")
+    print(">>> Direccion: http://localhost:8000")
+    print(">>> Para detener: Ctrl + C")
+    print("=" * 50)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

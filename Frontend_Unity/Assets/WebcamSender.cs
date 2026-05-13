@@ -37,7 +37,33 @@ public class WebcamSender : MonoBehaviour
 
     void Start()
     {
-        webcamTexture = new WebCamTexture();
+        // --- Detección inteligente de cámara ---
+        WebCamDevice[] dispositivos = WebCamTexture.devices;
+        string camaraElegida = "";
+
+        Debug.Log($"[Webcam] Se encontraron {dispositivos.Length} cámara(s):");
+        for (int i = 0; i < dispositivos.Length; i++)
+        {
+            Debug.Log($"  [{i}] {dispositivos[i].name}");
+            // Buscar DroidCam (o cualquier cámara virtual con "Droid" en el nombre)
+            if (dispositivos[i].name.ToLower().Contains("droid"))
+            {
+                camaraElegida = dispositivos[i].name;
+            }
+        }
+
+        // Si encontró DroidCam, usarla. Si no, usar la cámara por defecto.
+        if (!string.IsNullOrEmpty(camaraElegida))
+        {
+            Debug.Log($"[Webcam] >>> Usando DroidCam: {camaraElegida}");
+            webcamTexture = new WebCamTexture(camaraElegida);
+        }
+        else
+        {
+            Debug.Log("[Webcam] >>> DroidCam no encontrada, usando cámara por defecto.");
+            webcamTexture = new WebCamTexture();
+        }
+
         if (pantallaCamara != null) pantallaCamara.texture = webcamTexture;
         webcamTexture.Play();
 

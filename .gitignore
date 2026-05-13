@@ -3,6 +3,7 @@ __pycache__/
 venv/
 env/
 .env
+*.pyc
 
 # --- Ignorar de Unity ---
 /[Ll]ibrary/
@@ -12,9 +13,14 @@ env/
 /[Bb]uilds/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
+Frontend_Unity/[Ll]ibrary/
+Frontend_Unity/[Tt]emp/
+Frontend_Unity/[Ll]ogs/
+Frontend_Unity/[Uu]ser[Ss]ettings/
 *.csproj
 *.unityproj
 *.sln
+*.slnx
 *.suo
 *.tmp
 *.user
@@ -26,3 +32,13 @@ env/
 *.mdb
 *.opendb
 *.VC.db
+
+# --- Ignorar IDE ---
+.vscode/
+.idea/
+
+# --- Ignorar instaladores descargados ---
+*.exe
+!Instalar.bat
+!Iniciar_Servidor.bat
+!Abrir_Unity.bat
