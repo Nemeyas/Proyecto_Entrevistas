@@ -152,7 +152,24 @@ public class WebcamSender : MonoBehaviour
         else
         {
             estaGrabando = false;
+            
+            // IMPORTANTE: Obtener la posición REAL del micrófono ANTES de detenerlo.
+            // Sin esto, el AudioClip tiene 15 segundos de buffer y los samples
+            // después de la grabación real son basura/ruido que Google Speech
+            // interpreta como repeticiones de palabras (ej: "hola hola hola...").
+            int posicionReal = Microphone.GetPosition(null);
             Microphone.End(null);
+            
+            // Recortar el clip para enviar SOLO el audio que realmente se grabó
+            if (posicionReal > 0)
+            {
+                float[] datosReales = new float[posicionReal * clipGrabado.channels];
+                clipGrabado.GetData(datosReales, 0);
+                AudioClip clipRecortado = AudioClip.Create("grabacion_recortada", posicionReal, clipGrabado.channels, clipGrabado.frequency, false);
+                clipRecortado.SetData(datosReales, 0);
+                clipGrabado = clipRecortado;
+            }
+            
             textoDelBoton.text = "⏳ Enviando...";
             textoDelBoton.color = Color.yellow;
             

@@ -230,7 +230,7 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             
             # Llamada al modelo
             response = client.models.generate_content(
-                model='gemini-2.0-flash', 
+                model='gemini-2.5-flash', 
                 contents=prompt_sistema,
             )
             
@@ -348,7 +348,7 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
         """
         
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-2.5-flash',
             contents=prompt_reporte,
         )
         
