@@ -39,17 +39,7 @@ public class WebcamSender : MonoBehaviour
     public EntrevistadorAnimator miEntrevistadorAnimator;
     public bool entrevistaIniciada = false;
 
-    void Start()
-    {
-        // Si no hay menú principal en la escena, creamos uno automáticamente
-        if (GestorNavegacion.Instancia == null || GestorNavegacion.Instancia.panelMenu == null)
-        {
-            if (FindObjectOfType<MenuAutoBuilder>() == null)
-            {
-                gameObject.AddComponent<MenuAutoBuilder>();
-            }
-        }
-    }
+
 
     public void IniciarEntrevista()
     {
@@ -249,10 +239,12 @@ public class WebcamSender : MonoBehaviour
                 {
                     DetenerCamara();
 
-                    // Usar PanelUIBuilder para mostrar el reporte programáticamente
-                    PanelUIBuilder builder = FindObjectOfType<PanelUIBuilder>();
-                    if (builder == null) builder = gameObject.AddComponent<PanelUIBuilder>();
-                    builder.MostrarReporte(response.reporte);
+                    GestorNavegacion.Instancia.MostrarReporte();
+                    GestorReporte gestorReporte = FindObjectOfType<GestorReporte>();
+                    if (gestorReporte != null)
+                    {
+                        gestorReporte.MostrarDatosReporte(response.reporte);
+                    }
                 }
             }
 
