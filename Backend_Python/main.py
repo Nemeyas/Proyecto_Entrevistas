@@ -36,13 +36,24 @@ except Exception as e:
 
 app = FastAPI()
 
+# ==========================================
+# CONFIGURACIÓN DE LA ENTREVISTA
+# ==========================================
+TOTAL_TEMAS = 4          # Cantidad de temáticas en la entrevista
+PREGUNTAS_POR_TEMA = 2   # Cuántas preguntas se hacen por cada temática
+# Total de interacciones = TOTAL_TEMAS * PREGUNTAS_POR_TEMA = 8
+
 # Memoria de sesiones temporales (fallback por si Unity no envía IDSimulacion aún)
 sesiones_activas = {}
 sesiones_activas[0] = {
     "historial": [],
     "modo": "pasivo",
     "momentos_criticos": [],
-    "turno": 0
+    "tema_actual": 1,
+    "pregunta_en_tema": 0,
+    "emociones_del_tema": [],
+    "textos_usuario_tema": [],
+    "respuestas_ia_tema": []
 }
 
 @app.post("/iniciar_entrevista")
@@ -55,7 +66,11 @@ async def iniciar_entrevista(id_postulante: str = Form(...), nombre_postulante: 
             "historial": [],
             "modo": dificultad,
             "momentos_criticos": [],
-            "turno": 0
+            "tema_actual": 1,
+            "pregunta_en_tema": 0,
+            "emociones_del_tema": [],
+            "textos_usuario_tema": [],
+            "respuestas_ia_tema": []
         }
         return JSONResponse(content={"status": "exito", "id_simulacion": id_simulacion})
     except Exception as e:
@@ -113,22 +128,38 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             # 3. PENSAR (El nuevo cerebro de Gemini en acción)
             sesion = sesiones_activas.get(id_simulacion)
             if not sesion:
-                sesion = {"historial": [], "modo": "pasivo", "momentos_criticos": [], "turno": 0}
+                sesion = {
+                    "historial": [], "modo": "pasivo", "momentos_criticos": [],
+                    "tema_actual": 1, "pregunta_en_tema": 0,
+                    "emociones_del_tema": [], "textos_usuario_tema": [], "respuestas_ia_tema": []
+                }
                 sesiones_activas[id_simulacion] = sesion
             
-            if sesion["turno"] >= 4:
+            # ¿Ya se acabaron todos los temas?
+            if sesion["tema_actual"] > TOTAL_TEMAS:
                 return JSONResponse(content={
                     "status": "exito", 
                     "transcripcion": texto_transcrito,
                     "respuesta_ia": "La entrevista ha concluido formalmente. Por favor, presiona el botón de Finalizar para generar tu reporte."
                 })
-                
-            sesion["turno"] += 1
-            historial_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in sesion["historial"]])
             
+            # --- Registrar emoción e input del candidato en este tema ---
             emocion_actual = ultima_emocion_detectada.lower()
+            sesion["emociones_del_tema"].append(emocion_actual)
+            sesion["textos_usuario_tema"].append(texto_transcrito)
+            sesion["pregunta_en_tema"] += 1
+            
             if emocion_actual in ['fear', 'sad']:
-                sesion["momentos_criticos"].append(f"Turno {sesion['turno']}: Alta ansiedad o tristeza detectada.")
+                sesion["momentos_criticos"].append(
+                    f"Tema {sesion['tema_actual']}, Pregunta {sesion['pregunta_en_tema']}: Alta ansiedad o tristeza detectada."
+                )
+
+            # --- Inyectar la emoción en el historial para que Gemini la lea ---
+            sesion["historial"].append({
+                "role": "Candidato",
+                "content": f"{texto_transcrito} (Emoción detectada: {emocion_actual})"
+            })
+            historial_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in sesion["historial"]])
 
             # Leer el archivo de estilo correspondiente según el modo
             modo_entrevista = sesion['modo'].upper()
@@ -143,22 +174,24 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             prompt_sistema = f"""
             {base_prompt}
             
-            HISTORIAL DE LA CONVERSACIÓN:
+            HISTORIAL DE LA CONVERSACIÓN (incluye la emoción del candidato en cada intervención):
             {historial_str}
             
             CONTEXTO EN TIEMPO REAL DEL CANDIDATO:
             - Lo que acaba de decir: "{texto_transcrito}"
-            - Su emoción facial detectada en este milisegundo es: "{ultima_emocion_detectada}"
-            - TURNO ACTUAL DE LA ENTREVISTA: {sesion['turno']} de 4.
+            - Emoción facial detectada ahora: "{emocion_actual}"
+            - TEMA ACTUAL: {sesion['tema_actual']} de {TOTAL_TEMAS}.
+            - PREGUNTA: {sesion['pregunta_en_tema']} de {PREGUNTAS_POR_TEMA} en este tema.
             
             INSTRUCCIONES ESTRICTAS:
-            1. OBLIGATORIO: Inicia tu respuesta comentando sobre su emoción facial para darle realismo.
+            1. ADAPTACIÓN EMOCIONAL: Revisa las emociones entre paréntesis en el historial. Si el candidato muestra nerviosismo, miedo o tristeza persistente, ajusta tu tono (más empático o más desafiante según el modo). Si muestra confianza, puedes subir la exigencia.
             2. Evalúa brevemente lo que acaba de decir.
-            3. OBLIGATORIO: Revisa en tus instrucciones la ESTRUCTURA DE LA ENTREVISTA y formula tu pregunta/respuesta enfocada EXCLUSIVAMENTE en el tema del Turno {sesion['turno']}.
-            4. Sé conciso, máximo 3 o 4 líneas.
+            3. OBLIGATORIO: Mantente enfocado EXCLUSIVAMENTE en la temática del Tema {sesion['tema_actual']}.
+            4. Si es la pregunta 1 del tema, presenta el tema y haz la pregunta principal. Si es la pregunta {PREGUNTAS_POR_TEMA} (última del tema), haz una pregunta de profundización o cierre del tema.
+            5. Sé conciso, máximo 3 o 4 líneas.
             """
             
-            # Así se llama al modelo en la librería nueva
+            # Llamada al modelo
             response = client.models.generate_content(
                 model='gemini-2.5-flash', 
                 contents=prompt_sistema,
@@ -167,20 +200,48 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             respuesta_gemini = response.text
             print(f"🤖 Reclutador responde: {respuesta_gemini}")
             
-            sesion["historial"].append({"role": "Candidato", "content": texto_transcrito})
             sesion["historial"].append({"role": "Reclutador", "content": respuesta_gemini})
+            sesion["respuestas_ia_tema"].append(respuesta_gemini)
             
-            if id_simulacion != 0:
-                try:
-                    db.insert_turno(id_simulacion, sesion["turno"], respuesta_gemini, texto_transcrito, "neutral", ultima_emocion_detectada)
-                except Exception as e:
-                    print(f"Error guardando turno: {e}")
+            # --- ¿Se completaron todas las preguntas de este tema? ---
+            if sesion["pregunta_en_tema"] >= PREGUNTAS_POR_TEMA:
+                # Calcular la emoción predominante (moda) de todo el tema
+                emociones = sesion["emociones_del_tema"]
+                emocion_predominante = max(set(emociones), key=emociones.count) if emociones else "neutral"
+                
+                # Unir textos del tema para guardar en un solo registro de BD
+                texto_usuario_unido = " | ".join(sesion["textos_usuario_tema"])
+                respuesta_ia_unida = " | ".join(sesion["respuestas_ia_tema"])
+                
+                if id_simulacion != 0:
+                    try:
+                        db.insert_turno(
+                            id_simulacion, sesion["tema_actual"],
+                            respuesta_ia_unida, texto_usuario_unido,
+                            "neutral", emocion_predominante
+                        )
+                    except Exception as e:
+                        print(f"Error guardando turno temático: {e}")
+                
+                print(f"✅ Tema {sesion['tema_actual']} completado. Emoción predominante: {emocion_predominante}")
+                
+                # Avanzar al siguiente tema y reiniciar contadores
+                sesion["tema_actual"] += 1
+                sesion["pregunta_en_tema"] = 0
+                sesion["emociones_del_tema"] = []
+                sesion["textos_usuario_tema"] = []
+                sesion["respuestas_ia_tema"] = []
 
-            # 4. Devolver a Unity
+            # 4. Devolver a Unity con info del estado de la entrevista
+            entrevista_terminada = sesion["tema_actual"] > TOTAL_TEMAS
             return JSONResponse(content={
                 "status": "exito", 
                 "transcripcion": texto_transcrito,
-                "respuesta_ia": respuesta_gemini
+                "respuesta_ia": respuesta_gemini,
+                "tema_actual": sesion["tema_actual"],
+                "pregunta_en_tema": sesion["pregunta_en_tema"],
+                "tema_completado": sesion["pregunta_en_tema"] == 0 and sesion["tema_actual"] > 1,
+                "entrevista_terminada": entrevista_terminada
             })
             
     except sr.UnknownValueError:
