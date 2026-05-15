@@ -26,6 +26,7 @@ public class WebcamSender : MonoBehaviour
     WebCamTexture webcamTexture;
     public string serverURL_Emocion = "http://localhost:8000/analizar_emocion";
     public string serverURL_Audio = "http://localhost:8000/procesar_audio";
+    public string serverURL_Finalizar = "http://localhost:8000/finalizar_entrevista";
     public RawImage pantallaCamara;
     public TextMeshProUGUI textoEmocion; 
     
@@ -35,8 +36,9 @@ public class WebcamSender : MonoBehaviour
     
     public GestorChat miGestorDeChat;
     public EntrevistadorAnimator miEntrevistadorAnimator;
+    public bool entrevistaIniciada = false;
 
-    void Start()
+    public void IniciarEntrevista()
     {
         // --- Detección inteligente de cámara ---
         WebCamDevice[] dispositivos = WebCamTexture.devices;
@@ -75,7 +77,18 @@ public class WebcamSender : MonoBehaviour
         }
         // -----------------------------------------------
 
+        entrevistaIniciada = true;
         StartCoroutine(EnviarFotoRutinariamente());
+    }
+
+    public void DetenerCamara()
+    {
+        entrevistaIniciada = false;
+        if (webcamTexture != null && webcamTexture.isPlaying)
+        {
+            webcamTexture.Stop();
+        }
+        StopAllCoroutines();
     }
 
     IEnumerator EnviarFotoRutinariamente()
@@ -150,6 +163,10 @@ public class WebcamSender : MonoBehaviour
         
         WWWForm form = new WWWForm();
         form.AddBinaryData("audio", wavBytes, "respuesta.wav", "audio/wav");
+        if (GestorNavegacion.Instancia != null)
+        {
+            form.AddField("id_simulacion", GestorNavegacion.Instancia.idSimulacionActiva);
+        }
 
         using (UnityWebRequest www = UnityWebRequest.Post(serverURL_Audio, form))
         {
@@ -178,6 +195,54 @@ public class WebcamSender : MonoBehaviour
 
             textoDelBoton.text = "Hablar";
             textoDelBoton.color = Color.black;
+        }
+    }
+
+    public void FinalizarEntrevista()
+    {
+        StartCoroutine(EnviarPeticionFinalizar());
+    }
+
+    IEnumerator EnviarPeticionFinalizar()
+    {
+        if (textoDelBoton != null)
+        {
+            textoDelBoton.text = "Generando Reporte...";
+            textoDelBoton.color = Color.yellow;
+        }
+
+        WWWForm form = new WWWForm();
+        if (GestorNavegacion.Instancia != null)
+        {
+            form.AddField("id_simulacion", GestorNavegacion.Instancia.idSimulacionActiva);
+        }
+
+        using (UnityWebRequest www = UnityWebRequest.Post(serverURL_Finalizar, form))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                string jsonString = www.downloadHandler.text;
+                ResponseReporteBackend response = JsonUtility.FromJson<ResponseReporteBackend>(jsonString);
+
+                if (response.status == "exito" && response.reporte != null)
+                {
+                    DetenerCamara();
+                    GestorNavegacion.Instancia.MostrarReporte();
+                    GestorReporte gestorReporte = FindObjectOfType<GestorReporte>();
+                    if (gestorReporte != null)
+                    {
+                        gestorReporte.MostrarDatosReporte(response.reporte);
+                    }
+                }
+            }
+
+            if (textoDelBoton != null)
+            {
+                textoDelBoton.text = "Hablar";
+                textoDelBoton.color = Color.black;
+            }
         }
     }
 

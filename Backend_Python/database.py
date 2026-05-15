@@ -156,4 +156,19 @@ class Database:
         conn.close()
         return resultados
 
+    def get_reporte(self, id_simulacion):
+        conn = self.connect()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('''
+            SELECT S.IDSimulacion, P.NombrePostulante, P.IDPostulante, S.Dificultad, R.PuntajeGlobal, R.Resumen
+            FROM Simulacion S
+            JOIN Postulante P ON S.IDPostulante = P.IDPostulante
+            JOIN Reporte R ON S.IDSimulacion = R.IDSimulacion
+            WHERE S.IDSimulacion = %s
+        ''', (id_simulacion,))
+        resultado = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return resultado
+
 db = Database()

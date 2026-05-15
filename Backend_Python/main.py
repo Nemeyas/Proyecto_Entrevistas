@@ -271,9 +271,12 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
         {momentos_str}
 
         Genera un reporte final en formato JSON estricto con las siguientes claves:
-        - "puntaje": (número del 1 al 10 evaluando el desempeño general)
-        - "resumen": (un texto de 3-4 líneas resumiendo fortalezas, debilidades y recomendaciones basado en la charla y emociones)
-        No uses formato Markdown, solo devuelve el string JSON válido.
+        - "puntaje": (número del 1 al 100 evaluando el desempeño general)
+        - "resumen": (un texto de 3-4 líneas resumiendo fortalezas y debilidades)
+        - "estado_emocional": (descripción breve de su comportamiento emocional a lo largo de la entrevista)
+        - "recomendaciones": (lista de strings con recomendaciones de mejora)
+        - "momentos_criticos": (lista de objetos con las claves "pregunta" y "observacion")
+        No uses formato Markdown, solo devuelve el string JSON válido sin envolverlo en ```json.
         """
         response = client.models.generate_content(
             model='gemini-2.5-flash',
@@ -282,17 +285,18 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
         
         reporte_json = response.text.strip()
         if reporte_json.startswith("```json"):
-            reporte_json = reporte_json[7:-3]
+            reporte_json = reporte_json[7:-3].strip()
         elif reporte_json.startswith("```"):
-            reporte_json = reporte_json[3:-3]
+            reporte_json = reporte_json[3:-3].strip()
             
         data = json.loads(reporte_json)
         puntaje = float(data.get("puntaje", 0))
-        resumen = data.get("resumen", "Sin resumen disponible")
+        # Guardaremos el JSON completo en la columna Resumen
+        resumen_full_json = json.dumps(data, ensure_ascii=False)
         
         if id_simulacion != 0:
             db.finish_simulacion(id_simulacion)
-            db.insert_reporte(id_simulacion, puntaje, resumen)
+            db.insert_reporte(id_simulacion, puntaje, resumen_full_json)
             
         return JSONResponse(content={"status": "exito", "reporte": data})
     except Exception as e:
@@ -308,7 +312,32 @@ async def historial_reportes():
         for r in resultados:
             if r["TiempoInicio"]:
                 r["TiempoInicio"] = r["TiempoInicio"].strftime("%Y-%m-%d %H:%M:%S")
+            # Parsear el resumen JSON si existe
+            if r.get("Resumen"):
+                try:
+                    r["Resumen_JSON"] = json.loads(r["Resumen"])
+                except json.JSONDecodeError:
+                    r["Resumen_JSON"] = None
         return JSONResponse(content={"status": "exito", "historial": resultados})
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "mensaje": str(e)})
+
+
+@app.get("/reporte/{id_simulacion}")
+async def get_reporte_endpoint(id_simulacion: int):
+    try:
+        reporte = db.get_reporte(id_simulacion)
+        if not reporte:
+            return JSONResponse(content={"status": "error", "mensaje": "Reporte no encontrado"}, status_code=404)
+        
+        # Parsear el resumen JSON
+        if reporte.get("Resumen"):
+            try:
+                reporte["Resumen_JSON"] = json.loads(reporte["Resumen"])
+            except json.JSONDecodeError:
+                reporte["Resumen_JSON"] = None
+                
+        return JSONResponse(content={"status": "exito", "reporte": reporte})
     except Exception as e:
         return JSONResponse(content={"status": "error", "mensaje": str(e)})
 
