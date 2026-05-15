@@ -19,6 +19,7 @@ public class RespuestaServidorAudio
     public string status;
     public string transcripcion;
     public string respuesta_ia;
+    public bool entrevista_terminada;
 }
 
 public class WebcamSender : MonoBehaviour
@@ -40,8 +41,14 @@ public class WebcamSender : MonoBehaviour
 
     void Start()
     {
-        // Encender la cámara automáticamente al darle Play
-        IniciarEntrevista();
+        // Si no hay menú principal en la escena, creamos uno automáticamente
+        if (GestorNavegacion.Instancia == null || GestorNavegacion.Instancia.panelMenu == null)
+        {
+            if (FindObjectOfType<MenuAutoBuilder>() == null)
+            {
+                gameObject.AddComponent<MenuAutoBuilder>();
+            }
+        }
     }
 
     public void IniciarEntrevista()
@@ -187,14 +194,20 @@ public class WebcamSender : MonoBehaviour
                 {
                     if (miGestorDeChat != null)
                     {
-                        // Ahora TODO se va directo al muro
                         miGestorDeChat.ActualizarConversacion(respuestaAudio.transcripcion, respuestaAudio.respuesta_ia);
                     }
 
-                    // Activar animación de habla del entrevistador 3D
                     if (miEntrevistadorAnimator != null)
                     {
                         miEntrevistadorAnimator.ActivarHabla();
+                    }
+
+                    // Si el backend dice que la entrevista terminó, finalizar automáticamente
+                    if (respuestaAudio.entrevista_terminada)
+                    {
+                        yield return new WaitForSeconds(2f); // Dar tiempo a leer la despedida
+                        FinalizarEntrevista();
+                        yield break;
                     }
                 }
             }
@@ -235,12 +248,11 @@ public class WebcamSender : MonoBehaviour
                 if (response.status == "exito" && response.reporte != null)
                 {
                     DetenerCamara();
-                    GestorNavegacion.Instancia.MostrarReporte();
-                    GestorReporte gestorReporte = FindObjectOfType<GestorReporte>();
-                    if (gestorReporte != null)
-                    {
-                        gestorReporte.MostrarDatosReporte(response.reporte);
-                    }
+
+                    // Usar PanelUIBuilder para mostrar el reporte programáticamente
+                    PanelUIBuilder builder = FindObjectOfType<PanelUIBuilder>();
+                    if (builder == null) builder = gameObject.AddComponent<PanelUIBuilder>();
+                    builder.MostrarReporte(response.reporte);
                 }
             }
 

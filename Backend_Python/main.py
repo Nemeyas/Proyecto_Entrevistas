@@ -230,7 +230,7 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             
             # Llamada al modelo
             response = client.models.generate_content(
-                model='gemini-2.5-flash', 
+                model='gemini-2.0-flash', 
                 contents=prompt_sistema,
             )
             
@@ -299,24 +299,56 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
         historial_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in sesion["historial"]])
         momentos_str = "\n".join(sesion["momentos_criticos"])
 
+        # =====================================================
+        # PILAR 1: Estabilidad Emocional (30 pts) - Python puro
+        # =====================================================
+        # Base de 30 puntos, se restan 5 por cada momento crítico.
+        num_momentos_criticos = len(sesion["momentos_criticos"])
+        puntaje_emocional = max(0, 30 - (num_momentos_criticos * 5))
+        print(f"📊 Pilar 1 (Emocional): {puntaje_emocional}/30 ({num_momentos_criticos} momentos críticos)")
+
+        # =====================================================
+        # PILAR 2: Calidad de Comunicación (70 pts) - Gemini
+        # =====================================================
+        # Leer la rúbrica desde el archivo .md para incluirla en el prompt
+        ruta_rubrica = os.path.join(os.path.dirname(__file__), "rubrica_evaluacion.md")
+        try:
+            with open(ruta_rubrica, "r", encoding="utf-8") as f:
+                texto_rubrica = f.read()
+        except FileNotFoundError:
+            texto_rubrica = "Claridad (0-25), Competencia (0-25), Profesionalismo (0-20)."
+
         prompt_reporte = f"""
-        Eres un experto en Recursos Humanos analizando una entrevista simulada.
-        HISTORIAL DE LA ENTREVISTA:
+        Eres un experto en Recursos Humanos evaluando una entrevista simulada.
+        
+        HISTORIAL COMPLETO DE LA ENTREVISTA:
         {historial_str}
 
-        MOMENTOS CRÍTICOS DETECTADOS (Emociones negativas repetidas):
-        {momentos_str}
+        MOMENTOS CRÍTICOS DETECTADOS (Emociones negativas del candidato):
+        {momentos_str if momentos_str else "Ninguno detectado."}
 
-        Genera un reporte final en formato JSON estricto con las siguientes claves:
-        - "puntaje": (número del 1 al 100 evaluando el desempeño general)
-        - "resumen": (un texto de 3-4 líneas resumiendo fortalezas y debilidades)
-        - "estado_emocional": (descripción breve de su comportamiento emocional a lo largo de la entrevista)
-        - "recomendaciones": (lista de strings con recomendaciones de mejora)
-        - "momentos_criticos": (lista de objetos con las claves "pregunta" y "observacion")
-        No uses formato Markdown, solo devuelve el string JSON válido sin envolverlo en ```json.
+        RÚBRICA DE EVALUACIÓN QUE DEBES SEGUIR ESTRICTAMENTE:
+        {texto_rubrica}
+
+        INSTRUCCIONES OBLIGATORIAS:
+        1. Evalúa SOLO el Pilar 2 (Calidad de Comunicación). El Pilar 1 (Emocional) ya fue calculado por el sistema.
+        2. Asigna un puntaje numérico a CADA una de estas 3 métricas respetando los rangos exactos:
+           - "claridad": un número entero entre 0 y 25
+           - "competencia": un número entero entre 0 y 25
+           - "profesionalismo": un número entero entre 0 y 20
+        3. También genera las siguientes claves descriptivas:
+           - "resumen": un texto de 3-4 líneas resumiendo fortalezas y debilidades del candidato.
+           - "estado_emocional": descripción breve de su comportamiento emocional durante la entrevista.
+           - "recomendaciones": lista de strings con recomendaciones concretas de mejora.
+           - "momentos_criticos": lista de objetos con las claves "pregunta" y "observacion".
+        
+        Devuelve SOLAMENTE un JSON válido, sin formato Markdown, sin ```json, sin texto adicional.
+        Ejemplo de formato esperado:
+        {{"claridad": 20, "competencia": 18, "profesionalismo": 16, "resumen": "...", "estado_emocional": "...", "recomendaciones": ["..."], "momentos_criticos": [{{"pregunta": "...", "observacion": "..."}}]}}
         """
+        
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.0-flash',
             contents=prompt_reporte,
         )
         
@@ -327,13 +359,43 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
             reporte_json = reporte_json[3:-3].strip()
             
         data = json.loads(reporte_json)
-        puntaje = float(data.get("puntaje", 0))
+        
+        # Extraer los 3 sub-puntajes de Gemini (Pilar 2)
+        claridad = min(25, max(0, int(data.get("claridad", 0))))
+        competencia = min(25, max(0, int(data.get("competencia", 0))))
+        profesionalismo = min(20, max(0, int(data.get("profesionalismo", 0))))
+        puntaje_comunicacion = claridad + competencia + profesionalismo
+        print(f"📊 Pilar 2 (Comunicación): {puntaje_comunicacion}/70 (Claridad:{claridad}, Competencia:{competencia}, Profesionalismo:{profesionalismo})")
+
+        # =====================================================
+        # PUNTAJE FINAL = Pilar 1 + Pilar 2
+        # =====================================================
+        puntaje_final = puntaje_emocional + puntaje_comunicacion
+        print(f"🏆 PUNTAJE FINAL: {puntaje_final}/100")
+
+        # Enriquecer el reporte con el desglose completo
+        data["puntaje"] = puntaje_final
+        data["desglose"] = {
+            "estabilidad_emocional": {
+                "puntaje": puntaje_emocional,
+                "maximo": 30,
+                "momentos_criticos_detectados": num_momentos_criticos
+            },
+            "calidad_comunicacion": {
+                "puntaje": puntaje_comunicacion,
+                "maximo": 70,
+                "claridad": claridad,
+                "competencia": competencia,
+                "profesionalismo": profesionalismo
+            }
+        }
+
         # Guardaremos el JSON completo en la columna Resumen
         resumen_full_json = json.dumps(data, ensure_ascii=False)
         
         if id_simulacion != 0:
             db.finish_simulacion(id_simulacion)
-            db.insert_reporte(id_simulacion, puntaje, resumen_full_json)
+            db.insert_reporte(id_simulacion, puntaje_final, resumen_full_json)
             
         return JSONResponse(content={"status": "exito", "reporte": data})
     except Exception as e:

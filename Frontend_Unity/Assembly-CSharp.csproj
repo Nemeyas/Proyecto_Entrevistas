@@ -52,6 +52,8 @@
     <Compile Include="Assets\GestorHistorial.cs" />
     <Compile Include="Assets\GestorChat.cs" />
     <Compile Include="Assets\EntrevistadorAnimator.cs" />
+    <Compile Include="Assets\MenuAutoBuilder.cs" />
+    <Compile Include="Assets\PanelUIBuilder.cs" />
     <Compile Include="Assets\GestorNavegacion.cs" />
     <Compile Include="Assets\WebcamSender.cs" />
     <Compile Include="Assets\GestorReporte.cs" />
