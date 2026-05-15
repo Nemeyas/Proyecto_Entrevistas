@@ -38,6 +38,12 @@ public class WebcamSender : MonoBehaviour
     public EntrevistadorAnimator miEntrevistadorAnimator;
     public bool entrevistaIniciada = false;
 
+    void Start()
+    {
+        // Encender la cámara automáticamente al darle Play
+        IniciarEntrevista();
+    }
+
     public void IniciarEntrevista()
     {
         // --- Detección inteligente de cámara ---

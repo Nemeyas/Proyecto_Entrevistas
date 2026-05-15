@@ -5,7 +5,10 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 import numpy as np
 import cv2
-from deepface import DeepFace
+from PIL import Image
+
+# --- LIBRERÍA DE DETECCIÓN DE EMOCIONES (HSEmotion ONNX) ---
+from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
 
 # --- NUEVA LIBRERÍA DE GOOGLE ---
 from google import genai
@@ -25,6 +28,25 @@ client = genai.Client(api_key=api_key or "")
 
 # Variable global para recordar la emoción
 ultima_emocion_detectada = "neutral"
+
+# --- Inicialización de los modelos de detección de emociones ---
+# Se cargan UNA SOLA VEZ al prender el servidor (no en cada request)
+print(">>> Cargando modelos de detección facial y emociones (HSEmotion ONNX)...")
+detector_caras = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+detector_emociones = HSEmotionRecognizer(model_name='enet_b0_8_best_afew')
+print(">>> Modelos de emociones cargados correctamente.")
+
+# Diccionario de traducción: HSEmotion -> formato DeepFace (para que Unity no se entere del cambio)
+TRADUCCION_EMOCIONES = {
+    "Anger": "angry",
+    "Contempt": "disgust",
+    "Disgust": "disgust",
+    "Fear": "fear",
+    "Happiness": "happy",
+    "Neutral": "neutral",
+    "Sadness": "sad",
+    "Surprise": "surprise",
+}
 
 from database import db
 import json
@@ -90,14 +112,29 @@ async def analizar_emocion(file: UploadFile = File(...)):
         nparr = np.frombuffer(contents, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        # 2. Analizar con DeepFace
-        enforce_detection=False #evita que el servidor explote si parpadeas o te mueves
-        resultados = DeepFace.analyze(img, actions=['emotion'], enforce_detection=False)
+        # 2. Convertir a escala de grises para el detector de caras de OpenCV
+        gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
-        # 3. Extraer la emoción más fuerte
-        emocion_real = resultados[0]['dominant_emotion']
+        # 3. Detectar el rostro con OpenCV Haar Cascade
+        caras = detector_caras.detectMultiScale(gris, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
         
-        # 4. Actualizar el estado global para que Gemini lo sepa
+        if len(caras) > 0:
+            # 4. Recortar el rostro detectado
+            x, y, w, h = caras[0]
+            # Convertir de BGR a RGB para HSEmotion
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            rostro_recortado = img_rgb[y:y+h, x:x+w]
+            
+            # 5. Predecir la emoción con HSEmotion ONNX (mucho más preciso que DeepFace)
+            emocion_hsemotion, _ = detector_emociones.predict_emotions(rostro_recortado, logits=True)
+            
+            # 6. Traducir al formato que Unity ya conoce (capa de compatibilidad)
+            emocion_real = TRADUCCION_EMOCIONES.get(emocion_hsemotion, "neutral")
+        else:
+            # Si no se detectó ningún rostro, asumir neutral
+            emocion_real = "neutral"
+        
+        # 7. Actualizar el estado global para que Gemini lo sepa
         ultima_emocion_detectada = emocion_real
         print(f"📸 Visión detectó: {emocion_real}")
         

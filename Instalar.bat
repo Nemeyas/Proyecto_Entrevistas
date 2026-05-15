@@ -86,18 +86,31 @@ echo        Entorno virtual creado. OK
 :instalar_deps
 echo.
 echo [4/4] Instalando dependencias (esto puede tardar varios minutos)...
-echo        Descargando TensorFlow, DeepFace, OpenCV, etc.
+echo        Descargando HSEmotion ONNX, OpenCV, etc.
 echo.
 
-venv\Scripts\pip.exe install fastapi uvicorn opencv-python deepface SpeechRecognition google-genai python-multipart numpy tf-keras 2>&1 | findstr /i "successfully error"
+venv\Scripts\pip.exe install fastapi uvicorn opencv-python hsemotion-onnx onnxruntime SpeechRecognition google-genai python-multipart numpy python-dotenv 2>&1 | findstr /i "successfully error"
 
 if %errorlevel% neq 0 (
     echo.
     echo        Verificando instalacion...
 )
 
+:: --------------------------------------------------
+:: PASO 4b: Parchar bug conocido de hsemotion_onnx
+:: --------------------------------------------------
+echo.
+echo        Aplicando parche de compatibilidad a HSEmotion...
+venv\Scripts\python.exe -c "import os; p=os.path.join('venv','Lib','site-packages','hsemotion_onnx','facial_emotions.py'); f=open(p,'r'); c=f.read(); f.close(); c=c.replace('import urllib\n','import urllib\nimport urllib.request\n') if 'import urllib.request' not in c else c; f=open(p,'w'); f.write(c); f.close(); print('        Parche aplicado. OK')"
+
+:: --------------------------------------------------
+:: PASO 4c: Pre-descargar modelo de emociones
+:: --------------------------------------------------
+echo        Descargando modelo de IA para emociones (solo la primera vez)...
+venv\Scripts\python.exe -c "from hsemotion_onnx.facial_emotions import HSEmotionRecognizer; HSEmotionRecognizer(model_name='enet_b0_8_best_afew'); print('        Modelo descargado. OK')"
+
 :: Verificar que todo se instalo correctamente
-venv\Scripts\python.exe -c "import cv2; import fastapi; import deepface; import speech_recognition; import google.genai; import uvicorn; print('OK')" >nul 2>&1
+venv\Scripts\python.exe -c "import cv2; import fastapi; import hsemotion_onnx; import speech_recognition; import google.genai; import uvicorn; print('OK')" >nul 2>&1
 if %errorlevel% equ 0 (
     echo.
     echo ==================================================
@@ -121,7 +134,7 @@ if %errorlevel% equ 0 (
     echo  Intenta ejecutar manualmente:
     echo.
     echo    cd Backend_Python
-    echo    venv\Scripts\pip.exe install fastapi uvicorn opencv-python deepface SpeechRecognition google-genai python-multipart numpy tf-keras
+    echo    venv\Scripts\pip.exe install fastapi uvicorn opencv-python hsemotion-onnx onnxruntime SpeechRecognition google-genai python-multipart numpy python-dotenv
     echo.
     echo ==================================================
 )
