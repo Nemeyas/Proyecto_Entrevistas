@@ -19,6 +19,7 @@ public class RespuestaServidorAudio
     public string status;
     public string transcripcion;
     public string respuesta_ia;
+    public string animacion_entrevistador;
     public bool entrevista_terminada;
 }
 
@@ -38,35 +39,127 @@ public class WebcamSender : MonoBehaviour
     public GestorChat miGestorDeChat;
     public EntrevistadorAnimator miEntrevistadorAnimator;
     public bool entrevistaIniciada = false;
+    
+    // --- Variables de Estado y UI ---
+    private bool procesandoPeticion = false;
+    public GameObject botonFinalizar;
+    
+    // --- Selección de Dispositivos ---
+    public TMP_Dropdown dropdownCamara;
+    public TMP_Dropdown dropdownMicrofono;
+    private string nombreCamaraSeleccionada = "";
+    private string nombreMicrofonoSeleccionado = "";
 
+    void Start()
+    {
+        // El botón finalizar arranca apagado
+        if (botonFinalizar != null) botonFinalizar.SetActive(false);
+        
+        PoblarDispositivos();
+    }
+
+    void PoblarDispositivos()
+    {
+        if (dropdownCamara != null)
+        {
+            dropdownCamara.ClearOptions();
+            System.Collections.Generic.List<string> opcionesCamara = new System.Collections.Generic.List<string>();
+            WebCamDevice[] dispositivosCamara = WebCamTexture.devices;
+            int indiceCamaraDefecto = 0;
+
+            for (int i = 0; i < dispositivosCamara.Length; i++)
+            {
+                opcionesCamara.Add(dispositivosCamara[i].name);
+                if (dispositivosCamara[i].name.ToLower().Contains("droid"))
+                {
+                    indiceCamaraDefecto = i;
+                }
+            }
+
+            dropdownCamara.AddOptions(opcionesCamara);
+            if (opcionesCamara.Count > 0)
+            {
+                dropdownCamara.value = indiceCamaraDefecto;
+                nombreCamaraSeleccionada = opcionesCamara[indiceCamaraDefecto];
+            }
+
+            dropdownCamara.onValueChanged.AddListener(delegate {
+                nombreCamaraSeleccionada = opcionesCamara[dropdownCamara.value];
+                CambiarCamara();
+            });
+        }
+
+        if (dropdownMicrofono != null)
+        {
+            dropdownMicrofono.ClearOptions();
+            System.Collections.Generic.List<string> opcionesMicrofono = new System.Collections.Generic.List<string>();
+            string[] dispositivosMic = Microphone.devices;
+
+            for (int i = 0; i < dispositivosMic.Length; i++)
+            {
+                opcionesMicrofono.Add(dispositivosMic[i]);
+            }
+
+            dropdownMicrofono.AddOptions(opcionesMicrofono);
+            if (opcionesMicrofono.Count > 0)
+            {
+                dropdownMicrofono.value = 0;
+                nombreMicrofonoSeleccionado = opcionesMicrofono[0];
+            }
+
+            dropdownMicrofono.onValueChanged.AddListener(delegate {
+                nombreMicrofonoSeleccionado = opcionesMicrofono[dropdownMicrofono.value];
+            });
+        }
+    }
+
+    public void CambiarCamara()
+    {
+        if (entrevistaIniciada)
+        {
+            if (webcamTexture != null && webcamTexture.isPlaying)
+            {
+                webcamTexture.Stop();
+            }
+            if (!string.IsNullOrEmpty(nombreCamaraSeleccionada))
+            {
+                webcamTexture = new WebCamTexture(nombreCamaraSeleccionada);
+            }
+            else
+            {
+                webcamTexture = new WebCamTexture();
+            }
+            if (pantallaCamara != null) pantallaCamara.texture = webcamTexture;
+            webcamTexture.Play();
+        }
+    }
 
 
     public void IniciarEntrevista()
     {
-        // --- Detección inteligente de cámara ---
-        WebCamDevice[] dispositivos = WebCamTexture.devices;
-        string camaraElegida = "";
-
-        Debug.Log($"[Webcam] Se encontraron {dispositivos.Length} cámara(s):");
-        for (int i = 0; i < dispositivos.Length; i++)
+        // Si hay cámara seleccionada por el dropdown usarla, si no autodetectar
+        string camaraElegida = nombreCamaraSeleccionada;
+        
+        if (string.IsNullOrEmpty(camaraElegida))
         {
-            Debug.Log($"  [{i}] {dispositivos[i].name}");
-            // Buscar DroidCam (o cualquier cámara virtual con "Droid" en el nombre)
-            if (dispositivos[i].name.ToLower().Contains("droid"))
+            WebCamDevice[] dispositivos = WebCamTexture.devices;
+            for (int i = 0; i < dispositivos.Length; i++)
             {
-                camaraElegida = dispositivos[i].name;
+                if (dispositivos[i].name.ToLower().Contains("droid"))
+                {
+                    camaraElegida = dispositivos[i].name;
+                }
             }
         }
 
-        // Si encontró DroidCam, usarla. Si no, usar la cámara por defecto.
         if (!string.IsNullOrEmpty(camaraElegida))
         {
-            Debug.Log($"[Webcam] >>> Usando DroidCam: {camaraElegida}");
+            Debug.Log($"[Webcam] >>> Usando cámara: {camaraElegida}");
             webcamTexture = new WebCamTexture(camaraElegida);
         }
         else
         {
-            Debug.Log("[Webcam] >>> DroidCam no encontrada, usando cámara por defecto.");
+            Debug.Log("[Webcam] >>> Cámara no especificada, usando por defecto.");
             webcamTexture = new WebCamTexture();
         }
 
@@ -142,12 +235,16 @@ public class WebcamSender : MonoBehaviour
 
     public void AlternarGrabacion()
     {
+        if (procesandoPeticion) return; // BLOQUEO DE UI
+
         if (!estaGrabando)
         {
             estaGrabando = true;
             textoDelBoton.text = "🔴 Grabando...";
             textoDelBoton.color = Color.red;
-            clipGrabado = Microphone.Start(null, false, 15, 44100);
+            
+            string micAUsar = string.IsNullOrEmpty(nombreMicrofonoSeleccionado) ? null : nombreMicrofonoSeleccionado;
+            clipGrabado = Microphone.Start(micAUsar, false, 15, 44100);
         }
         else
         {
@@ -157,8 +254,9 @@ public class WebcamSender : MonoBehaviour
             // Sin esto, el AudioClip tiene 15 segundos de buffer y los samples
             // después de la grabación real son basura/ruido que Google Speech
             // interpreta como repeticiones de palabras (ej: "hola hola hola...").
-            int posicionReal = Microphone.GetPosition(null);
-            Microphone.End(null);
+            string micAUsar = string.IsNullOrEmpty(nombreMicrofonoSeleccionado) ? null : nombreMicrofonoSeleccionado;
+            int posicionReal = Microphone.GetPosition(micAUsar);
+            Microphone.End(micAUsar);
             
             // Recortar el clip para enviar SOLO el audio que realmente se grabó
             if (posicionReal > 0)
@@ -179,6 +277,7 @@ public class WebcamSender : MonoBehaviour
 
     IEnumerator EnviarAudioAlServidor()
     {
+        procesandoPeticion = true; // BLOQUEO DE UI
         byte[] wavBytes = ConvertirAWav(clipGrabado);
         
         WWWForm form = new WWWForm();
@@ -206,14 +305,29 @@ public class WebcamSender : MonoBehaviour
 
                     if (miEntrevistadorAnimator != null)
                     {
-                        miEntrevistadorAnimator.ActivarHabla();
+                        if (!string.IsNullOrEmpty(respuestaAudio.animacion_entrevistador))
+                        {
+                            miEntrevistadorAnimator.EjecutarAnimacionIA(respuestaAudio.animacion_entrevistador);
+                        }
+                        else
+                        {
+                            miEntrevistadorAnimator.ActivarHabla();
+                        }
                     }
 
-                    // Si el backend dice que la entrevista terminó, finalizar automáticamente
+                    // Si el backend dice que la entrevista terminó, finalizar automáticamente o mostrar botón
                     if (respuestaAudio.entrevista_terminada)
                     {
-                        yield return new WaitForSeconds(2f); // Dar tiempo a leer la despedida
-                        FinalizarEntrevista();
+                        if (botonFinalizar != null)
+                        {
+                            botonFinalizar.SetActive(true); // Dar la señal visual al usuario
+                        }
+                        else
+                        {
+                            yield return new WaitForSeconds(2f); // Dar tiempo a leer la despedida
+                            FinalizarEntrevista();
+                        }
+                        procesandoPeticion = false; // DESBLOQUEO DE UI
                         yield break;
                     }
                 }
@@ -221,16 +335,20 @@ public class WebcamSender : MonoBehaviour
 
             textoDelBoton.text = "Hablar";
             textoDelBoton.color = Color.black;
+            procesandoPeticion = false; // DESBLOQUEO DE UI
         }
     }
 
     public void FinalizarEntrevista()
     {
+        if (procesandoPeticion) return; // Evitar spam del botón
         StartCoroutine(EnviarPeticionFinalizar());
     }
 
     IEnumerator EnviarPeticionFinalizar()
     {
+        procesandoPeticion = true; // BLOQUEO DE UI
+        
         if (textoDelBoton != null)
         {
             textoDelBoton.text = "Generando Reporte...";
@@ -270,6 +388,8 @@ public class WebcamSender : MonoBehaviour
                 textoDelBoton.text = "Hablar";
                 textoDelBoton.color = Color.black;
             }
+            
+            procesandoPeticion = false; // DESBLOQUEO DE UI
         }
     }
 

@@ -30,7 +30,7 @@ public class EntrevistadorAnimator : MonoBehaviour
     {
         if (animator != null)
         {
-            animator.SetTrigger("hablar");
+            animator.SetTrigger("Hablar");
             Debug.Log("[Entrevistador] Animacion: Hablando");
         }
     }
@@ -50,7 +50,7 @@ public class EntrevistadorAnimator : MonoBehaviour
         {
             if (em == positiva)
             {
-                animator.SetTrigger("positivo");
+                animator.SetTrigger("Positivo");
                 Debug.Log($"[Entrevistador] Reaccion positiva a: {emocion}");
                 return;
             }
@@ -61,7 +61,7 @@ public class EntrevistadorAnimator : MonoBehaviour
         {
             if (em == negativa)
             {
-                animator.SetTrigger("negativo");
+                // animator.SetTrigger("Negativo"); // Trigger 'Negativo' does not exist in controller
                 Debug.Log($"[Entrevistador] Reaccion negativa a: {emocion}");
                 return;
             }
@@ -69,5 +69,38 @@ public class EntrevistadorAnimator : MonoBehaviour
 
         // Neutral: no hacer nada especial
         Debug.Log($"[Entrevistador] Emocion neutral: {emocion}");
+    }
+
+    /// <summary>
+    /// Ejecuta una animación específica solicitada por la IA (ej. "idle", "talking", "laughing", "clap").
+    /// </summary>
+    public void EjecutarAnimacionIA(string animacion)
+    {
+        if (animator == null || string.IsNullOrEmpty(animacion)) return;
+
+        string anim = animacion.ToLower();
+        
+        // Dependiendo de cómo estén configurados los triggers en el Animator, 
+        // aquí los llamamos. Asumimos que existen triggers con estos nombres.
+        if (anim == "talking")
+        {
+            animator.SetTrigger("Hablar");
+            Debug.Log("[Entrevistador] Animacion: Hablando");
+        }
+        else if (anim == "laughing" || anim == "clap")
+        {
+            animator.SetTrigger("Positivo");
+            Debug.Log("[Entrevistador] Animacion: Riendo/Positivo");
+        }
+        else if (anim == "idle")
+        {
+            // Do nothing, since transitions return to idle automatically.
+            Debug.Log("[Entrevistador] Animacion: Idle");
+        }
+        else
+        {
+            // Fallback a hablar
+            animator.SetTrigger("Hablar");
+        }
     }
 }

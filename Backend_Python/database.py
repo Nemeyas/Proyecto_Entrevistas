@@ -148,7 +148,7 @@ class Database:
             SELECT S.IDSimulacion, P.NombrePostulante, S.TiempoInicio, S.Dificultad, R.PuntajeGlobal, R.Resumen
             FROM Simulacion S
             JOIN Postulante P ON S.IDPostulante = P.IDPostulante
-            LEFT JOIN Reporte R ON S.IDSimulacion = R.IDSimulacion
+            JOIN Reporte R ON S.IDSimulacion = R.IDSimulacion
             ORDER BY S.TiempoInicio DESC
         ''')
         resultados = cursor.fetchall()
@@ -170,5 +170,34 @@ class Database:
         cursor.close()
         conn.close()
         return resultado
+
+    def delete_reporte(self, id_simulacion):
+        conn = self.connect()
+        cursor = conn.cursor()
+        try:
+            print(f"\n[DB] Iniciando eliminacion total para IDSimulacion: {id_simulacion}")
+            
+            # 1. Turnos
+            cursor.execute('DELETE FROM Turno WHERE IDSimulacion = %s', (id_simulacion,))
+            print(f"[DB] Turnos eliminados: {cursor.rowcount}")
+            
+            # 2. Reporte
+            cursor.execute('DELETE FROM Reporte WHERE IDSimulacion = %s', (id_simulacion,))
+            print(f"[DB] Reportes eliminados: {cursor.rowcount}")
+            
+            # 3. Simulacion
+            cursor.execute('DELETE FROM Simulacion WHERE IDSimulacion = %s', (id_simulacion,))
+            print(f"[DB] Simulaciones eliminadas: {cursor.rowcount}")
+            
+            conn.commit()
+            print(f"[DB] Transaccion completada con exito.\n")
+            return True
+        except Exception as e:
+            conn.rollback()
+            print(f"[DB] ERROR en delete_reporte ({id_simulacion}): {e}")
+            return False
+        finally:
+            cursor.close()
+            conn.close()
 
 db = Database()

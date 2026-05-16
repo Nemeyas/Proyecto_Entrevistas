@@ -95,25 +95,65 @@ public class GestorHistorial : MonoBehaviour
                 {
                     foreach (var item in response.historial)
                     {
-                        GameObject tarjeta = Instantiate(prefabTarjeta, contenedorTarjetas);
-                        
-                        TextMeshProUGUI[] textos = tarjeta.GetComponentsInChildren<TextMeshProUGUI>();
-                        if (textos.Length >= 4)
-                        {
-                            textos[0].text = $"ID: {item.IDSimulacion} - {item.NombrePostulante}";
-                            textos[1].text = $"Modo: {item.Dificultad}";
-                            textos[2].text = $"Fecha: {item.TiempoInicio}";
-                            textos[3].text = $"Puntaje: {item.PuntajeGlobal}/100";
-                        }
-
-                        Button btn = tarjeta.GetComponentInChildren<Button>();
-                        if (btn != null)
-                        {
-                            int idSimulacion = item.IDSimulacion;
-                            btn.onClick.AddListener(() => VerDetalleReporte(idSimulacion));
-                        }
+                        ConfigurarTarjeta(item);
                     }
                 }
+            }
+        }
+    }
+
+    void ConfigurarTarjeta(HistorialItem item)
+    {
+        GameObject tarjeta = Instantiate(prefabTarjeta, contenedorTarjetas);
+        TextMeshProUGUI[] textos = tarjeta.GetComponentsInChildren<TextMeshProUGUI>();
+        
+        if (textos.Length >= 4)
+        {
+            textos[0].text = $"ID: {item.IDSimulacion} - {item.NombrePostulante}";
+            textos[1].text = $"Modo: {item.Dificultad}";
+            textos[2].text = $"Fecha: {item.TiempoInicio}";
+            textos[3].text = $"Puntaje: {item.PuntajeGlobal}/100";
+        }
+
+        Button[] btns = tarjeta.GetComponentsInChildren<Button>(true);
+        int idParaEsteBoton = item.IDSimulacion;
+
+        foreach (Button b in btns)
+        {
+            b.onClick.RemoveAllListeners();
+            if (b.name.ToLower().Contains("borrar") || b.name.ToLower().Contains("delete") || b.name.ToLower().Contains("eliminar"))
+            {
+                b.onClick.AddListener(() => {
+                    Debug.Log("Solicitando borrar ID: " + idParaEsteBoton);
+                    BorrarReporte(idParaEsteBoton);
+                });
+            }
+            else
+            {
+                b.onClick.AddListener(() => VerDetalleReporte(idParaEsteBoton));
+            }
+        }
+    }
+
+    void BorrarReporte(int idSimulacion)
+    {
+        StartCoroutine(PeticionBorrarReporte(idSimulacion));
+    }
+
+    IEnumerator PeticionBorrarReporte(int idSimulacion)
+    {
+        using (UnityWebRequest www = UnityWebRequest.Delete(urlReporte + idSimulacion))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log("Reporte eliminado con éxito.");
+                CargarHistorial();
+            }
+            else
+            {
+                Debug.LogError("Error al eliminar el reporte: " + www.error);
             }
         }
     }

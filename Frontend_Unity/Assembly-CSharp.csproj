@@ -52,8 +52,6 @@
     <Compile Include="Assets\GestorHistorial.cs" />
     <Compile Include="Assets\GestorChat.cs" />
     <Compile Include="Assets\EntrevistadorAnimator.cs" />
-    <Compile Include="Assets\MenuAutoBuilder.cs" />
-    <Compile Include="Assets\PanelUIBuilder.cs" />
     <Compile Include="Assets\GestorNavegacion.cs" />
     <Compile Include="Assets\WebcamSender.cs" />
     <Compile Include="Assets\GestorReporte.cs" />
@@ -1439,6 +1437,10 @@
       <HintPath>Library\ScriptAssemblies\Unity.2D.Psdimporter.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="MCPForUnity.Runtime">
+      <HintPath>Library\ScriptAssemblies\MCPForUnity.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Analytics">
       <HintPath>Library\ScriptAssemblies\Analytics.dll</HintPath>
       <Private>False</Private>
@@ -1477,6 +1479,10 @@
     </Reference>
     <Reference Include="Unity.SurfaceCache.Runtime">
       <HintPath>Library\ScriptAssemblies\Unity.SurfaceCache.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="MCPForUnity.Editor">
+      <HintPath>Library\ScriptAssemblies\MCPForUnity.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.Timeline.Editor">

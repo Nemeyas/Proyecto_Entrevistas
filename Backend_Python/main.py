@@ -221,11 +221,13 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             - PREGUNTA: {sesion['pregunta_en_tema']} de {PREGUNTAS_POR_TEMA} en este tema.
             
             INSTRUCCIONES ESTRICTAS:
-            1. ADAPTACIÓN EMOCIONAL: Revisa las emociones entre paréntesis en el historial. Si el candidato muestra nerviosismo, miedo o tristeza persistente, ajusta tu tono (más empático o más desafiante según el modo). Si muestra confianza, puedes subir la exigencia.
-            2. Evalúa brevemente lo que acaba de decir.
-            3. OBLIGATORIO: Mantente enfocado EXCLUSIVAMENTE en la temática del Tema {sesion['tema_actual']}.
-            4. Si es la pregunta 1 del tema, presenta el tema y haz la pregunta principal. Si es la pregunta {PREGUNTAS_POR_TEMA} (última del tema), haz una pregunta de profundización o cierre del tema.
-            5. Sé conciso, máximo 3 o 4 líneas.
+            1. ADAPTACIÓN EMOCIONAL: Revisa las emociones del candidato. Ajusta tu tono.
+            2. OBLIGATORIO: Mantente enfocado EXCLUSIVAMENTE en la temática del Tema {sesion['tema_actual']}.
+            3. Sé conciso, máximo 3 o 4 líneas.
+            4. FORMATO OBLIGATORIO: Debes responder ÚNICAMENTE con un JSON válido, sin formato markdown, con dos claves:
+               - "respuesta": Tu texto de respuesta para el candidato.
+               - "animacion": Elige una de estas opciones según tu respuesta: "idle", "talking", "laughing", "clap".
+            Ejemplo: {{"respuesta": "Excelente respuesta, me gusta tu enfoque.", "animacion": "clap"}}
             """
             
             # Llamada al modelo
@@ -234,8 +236,21 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
                 contents=prompt_sistema,
             )
             
-            respuesta_gemini = response.text
-            print(f"🤖 Reclutador responde: {respuesta_gemini}")
+            respuesta_cruda = response.text.strip()
+            if respuesta_cruda.startswith("```json"):
+                respuesta_cruda = respuesta_cruda[7:-3].strip()
+            elif respuesta_cruda.startswith("```"):
+                respuesta_cruda = respuesta_cruda[3:-3].strip()
+            
+            try:
+                data = json.loads(respuesta_cruda)
+                respuesta_gemini = data.get("respuesta", respuesta_cruda)
+                animacion_entrevistador = data.get("animacion", "talking")
+            except Exception as e:
+                respuesta_gemini = respuesta_cruda
+                animacion_entrevistador = "talking"
+
+            print(f"🤖 Reclutador responde: {respuesta_gemini} [Anim: {animacion_entrevistador}]")
             
             sesion["historial"].append({"role": "Reclutador", "content": respuesta_gemini})
             sesion["respuestas_ia_tema"].append(respuesta_gemini)
@@ -275,6 +290,7 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
                 "status": "exito", 
                 "transcripcion": texto_transcrito,
                 "respuesta_ia": respuesta_gemini,
+                "animacion_entrevistador": animacion_entrevistador,
                 "tema_actual": sesion["tema_actual"],
                 "pregunta_en_tema": sesion["pregunta_en_tema"],
                 "tema_completado": sesion["pregunta_en_tema"] == 0 and sesion["tema_actual"] > 1,
@@ -283,10 +299,10 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             
     except sr.UnknownValueError:
         print("❌ No se entendió el audio")
-        return JSONResponse(content={"status": "error", "respuesta_ia": "¿Podrías repetir eso? No te escuché bien."})
+        return JSONResponse(content={"status": "error", "respuesta_ia": "¿Podrías repetir eso? No te escuché bien.", "animacion_entrevistador": "idle"})
     except Exception as e:
         print(f"❌ Error en audio: {e}")
-        return JSONResponse(content={"status": "error", "respuesta_ia": "Hubo un error de conexión, continuemos."})
+        return JSONResponse(content={"status": "error", "respuesta_ia": "Hubo un error de conexión, continuemos.", "animacion_entrevistador": "idle"})
 
 
 @app.post("/finalizar_entrevista")
@@ -438,6 +454,21 @@ async def get_reporte_endpoint(id_simulacion: int):
                 
         return JSONResponse(content={"status": "exito", "reporte": reporte})
     except Exception as e:
+        return JSONResponse(content={"status": "error", "mensaje": str(e)})
+
+@app.delete("/reporte/{id_simulacion}")
+async def eliminar_reporte(id_simulacion: int):
+    try:
+        print(f">>> RECIBIDA PETICION DELETE PARA ID: {id_simulacion}")
+        exito = db.delete_reporte(id_simulacion)
+        if exito:
+            print(f">>> ELIMINACION EXITOSA EN DB PARA ID: {id_simulacion}")
+            return JSONResponse(content={"status": "exito", "mensaje": "Reporte eliminado correctamente"})
+        else:
+            print(f">>> ELIMINACION FALLIDA EN DB PARA ID: {id_simulacion}")
+            return JSONResponse(content={"status": "error", "mensaje": "No se pudo eliminar el reporte"})
+    except Exception as e:
+        print(f">>> ERROR CRITICO EN ENDPOINT DELETE: {e}")
         return JSONResponse(content={"status": "error", "mensaje": str(e)})
 
 
