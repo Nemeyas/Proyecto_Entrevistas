@@ -11,6 +11,11 @@ public class GestorNavegacion : MonoBehaviour
     public GameObject panelHistorial;
     public GameObject entorno3D;
 
+    // --- Modelos del entrevistador ---
+    public GameObject modeloPasivo;
+    public GameObject modeloAgresivo;
+
+    public string dificultadActiva = "pasivo";
     public int idSimulacionActiva = 0;
     public string nombrePostulanteActivo = "";
     public string rutPostulanteActivo = "";
@@ -46,7 +51,13 @@ public class GestorNavegacion : MonoBehaviour
 
         if (entorno3D != null)
         {
-            entorno3D.SetActive(panelAMostrar == panelEntrevista);
+            bool mostrarEntorno = (panelAMostrar == panelEntrevista);
+            entorno3D.SetActive(mostrarEntorno);
+
+            if (mostrarEntorno)
+            {
+                ActivarModeloSegunDificultad();
+            }
         }
     }
 
@@ -73,5 +84,30 @@ public class GestorNavegacion : MonoBehaviour
     public void MostrarHistorial()
     {
         MostrarPanel(panelHistorial);
+    }
+
+    /// <summary>
+    /// Activa el modelo 3D correspondiente a la dificultad seleccionada
+    /// y actualiza la referencia del animator en WebcamSender.
+    /// </summary>
+    void ActivarModeloSegunDificultad()
+    {
+        bool esPasivo = (dificultadActiva == "pasivo");
+
+        if (modeloPasivo != null) modeloPasivo.SetActive(esPasivo);
+        if (modeloAgresivo != null) modeloAgresivo.SetActive(!esPasivo);
+
+        // Actualizar la referencia del EntrevistadorAnimator en WebcamSender
+        WebcamSender ws = FindObjectOfType<WebcamSender>();
+        if (ws != null)
+        {
+            GameObject modeloActivo = esPasivo ? modeloPasivo : modeloAgresivo;
+            if (modeloActivo != null)
+            {
+                ws.miEntrevistadorAnimator = modeloActivo.GetComponent<EntrevistadorAnimator>();
+            }
+        }
+
+        Debug.Log($"[GestorNavegacion] Modelo activado: {(esPasivo ? "Pasivo" : "Agresivo")}");
     }
 }

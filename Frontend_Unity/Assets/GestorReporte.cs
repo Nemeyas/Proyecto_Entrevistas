@@ -38,6 +38,10 @@ public class GestorReporte : MonoBehaviour
     public TextMeshProUGUI textoMomentosCriticos;
     public Button btnSalir;
 
+    [Header("UI Momentos Críticos Dinámicos")]
+    public Transform contenedorMomentosCriticos;
+    public GameObject plantillaMomentoCritico;
+
     void Start()
     {
         if (btnSalir != null)
@@ -67,15 +71,68 @@ public class GestorReporte : MonoBehaviour
         }
         textoRecomendaciones.text = recs;
 
-        string mcs = "Momentos Críticos:\n";
-        if (reporte.momentos_criticos != null)
+        if (contenedorMomentosCriticos != null && plantillaMomentoCritico != null)
         {
-            foreach (var mc in reporte.momentos_criticos)
+            // Destruir items anteriores (excepto la plantilla y el titulo)
+            foreach (Transform child in contenedorMomentosCriticos)
             {
-                mcs += $"Q: {mc.pregunta}\nObs: {mc.observacion}\n\n";
+                if (child.gameObject != plantillaMomentoCritico && child.name.StartsWith("Critico_"))
+                {
+                    Destroy(child.gameObject);
+                }
+            }
+
+            plantillaMomentoCritico.SetActive(false);
+
+            if (reporte.momentos_criticos != null && reporte.momentos_criticos.Count > 0)
+            {
+                for (int i = 0; i < reporte.momentos_criticos.Count; i++)
+                {
+                    var mc = reporte.momentos_criticos[i];
+                    GameObject nuevoInst = Instantiate(plantillaMomentoCritico, contenedorMomentosCriticos);
+                    nuevoInst.name = $"Critico_Instanciado_{i}";
+                    nuevoInst.SetActive(true);
+
+                    // Buscar textos en los hijos. Se asume orden: Pregunta, Observacion
+                    TextMeshProUGUI[] textos = nuevoInst.GetComponentsInChildren<TextMeshProUGUI>();
+                    if (textos.Length >= 2)
+                    {
+                        textos[0].text = mc.pregunta;
+                        textos[1].text = "! " + mc.observacion;
+                    }
+                }
+            }
+            else
+            {
+                // Si no hay momentos críticos, mostramos un mensaje positivo por defecto
+                GameObject nuevoInst = Instantiate(plantillaMomentoCritico, contenedorMomentosCriticos);
+                nuevoInst.name = "Critico_Vacio";
+                nuevoInst.SetActive(true);
+
+                TextMeshProUGUI[] textos = nuevoInst.GetComponentsInChildren<TextMeshProUGUI>();
+                if (textos.Length >= 2)
+                {
+                    textos[0].text = "¡Excelente desempeño!";
+                    textos[1].text = "No se detectaron momentos de alta ansiedad o nerviosismo durante la entrevista.";
+                    textos[1].color = new Color(0.2f, 0.8f, 0.2f); // Un toque verde amigable
+                }
             }
         }
-        textoMomentosCriticos.text = mcs;
+        else
+        {
+            string mcs = "Momentos Críticos:\n";
+            if (reporte.momentos_criticos != null)
+            {
+                foreach (var mc in reporte.momentos_criticos)
+                {
+                    mcs += $"Q: {mc.pregunta}\nObs: {mc.observacion}\n\n";
+                }
+            }
+            if (textoMomentosCriticos != null)
+            {
+                textoMomentosCriticos.text = mcs;
+            }
+        }
     }
 
     private string ObtenerNotaLetra(float puntaje)

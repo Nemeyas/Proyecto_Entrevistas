@@ -75,9 +75,16 @@ class Database:
             IDSimulacion INT,
             PuntajeGlobal FLOAT,
             Resumen VARCHAR(3000),
+            ResumenMomentoCritico VARCHAR(3000),
             FOREIGN KEY (IDSimulacion) REFERENCES Simulacion(IDSimulacion)
         )
         ''')
+        
+        try:
+            cursor.execute('ALTER TABLE Reporte ADD COLUMN ResumenMomentoCritico VARCHAR(3000)')
+        except mysql.connector.Error as err:
+            pass
+
 
         conn.commit()
         cursor.close()
@@ -130,12 +137,12 @@ class Database:
         cursor.close()
         conn.close()
 
-    def insert_reporte(self, id_simulacion, puntaje_global, resumen):
+    def insert_reporte(self, id_simulacion, puntaje_global, resumen, resumen_momento_critico):
         conn = self.connect()
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO Reporte (IDSimulacion, PuntajeGlobal, Resumen) VALUES (%s, %s, %s)',
-            (id_simulacion, puntaje_global, resumen)
+            'INSERT INTO Reporte (IDSimulacion, PuntajeGlobal, Resumen, ResumenMomentoCritico) VALUES (%s, %s, %s, %s)',
+            (id_simulacion, puntaje_global, resumen, resumen_momento_critico)
         )
         conn.commit()
         cursor.close()
@@ -145,7 +152,7 @@ class Database:
         conn = self.connect()
         cursor = conn.cursor(dictionary=True)
         cursor.execute('''
-            SELECT S.IDSimulacion, P.NombrePostulante, S.TiempoInicio, S.Dificultad, R.PuntajeGlobal, R.Resumen
+            SELECT S.IDSimulacion, P.NombrePostulante, S.TiempoInicio, S.Dificultad, R.PuntajeGlobal, R.Resumen, R.ResumenMomentoCritico
             FROM Simulacion S
             JOIN Postulante P ON S.IDPostulante = P.IDPostulante
             JOIN Reporte R ON S.IDSimulacion = R.IDSimulacion
@@ -160,7 +167,7 @@ class Database:
         conn = self.connect()
         cursor = conn.cursor(dictionary=True)
         cursor.execute('''
-            SELECT S.IDSimulacion, P.NombrePostulante, P.IDPostulante, S.Dificultad, R.PuntajeGlobal, R.Resumen
+            SELECT S.IDSimulacion, P.NombrePostulante, P.IDPostulante, S.Dificultad, R.PuntajeGlobal, R.Resumen, R.ResumenMomentoCritico
             FROM Simulacion S
             JOIN Postulante P ON S.IDPostulante = P.IDPostulante
             JOIN Reporte R ON S.IDSimulacion = R.IDSimulacion

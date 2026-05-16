@@ -409,9 +409,12 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
         # Guardaremos el JSON completo en la columna Resumen
         resumen_full_json = json.dumps(data, ensure_ascii=False)
         
+        # Guardaremos los momentos criticos en la nueva columna
+        momentos_criticos_resumen = json.dumps(data.get("momentos_criticos", []), ensure_ascii=False)
+        
         if id_simulacion != 0:
             db.finish_simulacion(id_simulacion)
-            db.insert_reporte(id_simulacion, puntaje_final, resumen_full_json)
+            db.insert_reporte(id_simulacion, puntaje_final, resumen_full_json, momentos_criticos_resumen)
             
         return JSONResponse(content={"status": "exito", "reporte": data})
     except Exception as e:
@@ -433,6 +436,11 @@ async def historial_reportes():
                     r["Resumen_JSON"] = json.loads(r["Resumen"])
                 except json.JSONDecodeError:
                     r["Resumen_JSON"] = None
+            if r.get("ResumenMomentoCritico"):
+                try:
+                    r["ResumenMomentoCritico_JSON"] = json.loads(r["ResumenMomentoCritico"])
+                except json.JSONDecodeError:
+                    r["ResumenMomentoCritico_JSON"] = None
         return JSONResponse(content={"status": "exito", "historial": resultados})
     except Exception as e:
         return JSONResponse(content={"status": "error", "mensaje": str(e)})
@@ -451,6 +459,13 @@ async def get_reporte_endpoint(id_simulacion: int):
                 reporte["Resumen_JSON"] = json.loads(reporte["Resumen"])
             except json.JSONDecodeError:
                 reporte["Resumen_JSON"] = None
+                
+        # Parsear ResumenMomentoCritico
+        if reporte.get("ResumenMomentoCritico"):
+            try:
+                reporte["ResumenMomentoCritico_JSON"] = json.loads(reporte["ResumenMomentoCritico"])
+            except json.JSONDecodeError:
+                reporte["ResumenMomentoCritico_JSON"] = None
                 
         return JSONResponse(content={"status": "exito", "reporte": reporte})
     except Exception as e:

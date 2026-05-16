@@ -66,6 +66,7 @@ public class GestorMenuPrincipal : MonoBehaviour
                     GestorNavegacion.Instancia.idSimulacionActiva = response.id_simulacion;
                     GestorNavegacion.Instancia.nombrePostulanteActivo = nombre;
                     GestorNavegacion.Instancia.rutPostulanteActivo = rut;
+                    GestorNavegacion.Instancia.dificultadActiva = dificultad;
 
                     if (textoError != null) textoError.text = "";
                     GestorNavegacion.Instancia.MostrarEntrevista();
