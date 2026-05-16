@@ -28,6 +28,8 @@ client = genai.Client(api_key=api_key or "")
 
 # Variable global para recordar la emoción
 ultima_emocion_detectada = "neutral"
+# Buffer para almacenar las emociones detectadas durante el turno del usuario
+buffer_emociones = []
 
 # --- Inicialización de los modelos de detección de emociones ---
 # Se cargan UNA SOLA VEZ al prender el servidor (no en cada request)
@@ -105,7 +107,7 @@ async def iniciar_entrevista(id_postulante: str = Form(...), nombre_postulante: 
 
 @app.post("/analizar_emocion")
 async def analizar_emocion(file: UploadFile = File(...)):
-    global ultima_emocion_detectada
+    global ultima_emocion_detectada, buffer_emociones
     try:
         # 1. Convertir la imagen que llega de Unity a formato OpenCV
         contents = await file.read()
@@ -116,14 +118,28 @@ async def analizar_emocion(file: UploadFile = File(...)):
         gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
         # 3. Detectar el rostro con OpenCV Haar Cascade
-        caras = detector_caras.detectMultiScale(gris, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+        # CONFIGURACIÓN ANTERIOR: caras = detector_caras.detectMultiScale(gris, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+        caras = detector_caras.detectMultiScale(gris, scaleFactor=1.05, minNeighbors=4, minSize=(80, 80))
         
         if len(caras) > 0:
             # 4. Recortar el rostro detectado
             x, y, w, h = caras[0]
             # Convertir de BGR a RGB para HSEmotion
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            rostro_recortado = img_rgb[y:y+h, x:x+w]
+            
+            # --- CÓDIGO ANTERIOR SIN MARGEN ---
+            # rostro_recortado = img_rgb[y:y+h, x:x+w]
+            
+            # --- NUEVO CÓDIGO CON MARGEN (PADDING) ---
+            margen_y = int(h * 0.15)
+            margen_x = int(w * 0.15)
+            
+            y_inicio = max(0, y - margen_y)
+            y_fin = min(img.shape[0], y + h + margen_y)
+            x_inicio = max(0, x - margen_x)
+            x_fin = min(img.shape[1], x + w + margen_x)
+            
+            rostro_recortado = img_rgb[y_inicio:y_fin, x_inicio:x_fin]
             
             # 5. Predecir la emoción con HSEmotion ONNX (mucho más preciso que DeepFace)
             emocion_hsemotion, _ = detector_emociones.predict_emotions(rostro_recortado, logits=True)
@@ -135,7 +151,18 @@ async def analizar_emocion(file: UploadFile = File(...)):
             emocion_real = "neutral"
         
         # 7. Actualizar el estado global para que Gemini lo sepa
+        # --- CÓDIGO ANTERIOR SIN BUFFER ---
+        # ultima_emocion_detectada = emocion_real
+        # print(f"📸 Visión detectó: {emocion_real}")
+        
+        # --- NUEVO CÓDIGO CON BUFFER (TOP 4) ---
         ultima_emocion_detectada = emocion_real
+        buffer_emociones.append(emocion_real)
+        
+        # Mantener solo las últimas 4 emociones detectadas
+        if len(buffer_emociones) > 4:
+            buffer_emociones.pop(0)
+            
         print(f"📸 Visión detectó: {emocion_real}")
         
         return JSONResponse(content={"status": "exito", "emocion": emocion_real})
@@ -149,7 +176,7 @@ async def analizar_emocion(file: UploadFile = File(...)):
 # ==========================================
 @app.post("/procesar_audio")
 async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = Form(0)):
-    global ultima_emocion_detectada
+    global ultima_emocion_detectada, buffer_emociones
     try:
         # 1. Escuchar el audio
         audio_bytes = await audio.read()
@@ -181,7 +208,19 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
                 })
             
             # --- Registrar emoción e input del candidato en este tema ---
-            emocion_actual = ultima_emocion_detectada.lower()
+            # --- CÓDIGO ANTERIOR SIN BUFFER ---
+            # emocion_actual = ultima_emocion_detectada.lower()
+            
+            # --- NUEVO CÓDIGO CON BUFFER (TOP 4) ---
+            if buffer_emociones:
+                # Obtener la emoción más frecuente (moda) de todo lo grabado en este turno
+                emocion_actual = max(set(buffer_emociones), key=buffer_emociones.count).lower()
+                print(f"📊 Emoción promedio del turno: {emocion_actual} (calculado de {len(buffer_emociones)} lecturas)")
+                buffer_emociones.clear() # Limpiar el buffer para el siguiente turno
+            else:
+                emocion_actual = ultima_emocion_detectada.lower()
+                print(f"📊 Emoción del turno (sin buffer): {emocion_actual}")
+                
             sesion["emociones_del_tema"].append(emocion_actual)
             sesion["textos_usuario_tema"].append(texto_transcrito)
             sesion["pregunta_en_tema"] += 1
