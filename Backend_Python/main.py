@@ -354,6 +354,12 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
         historial_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in sesion["historial"]])
         momentos_str = "\n".join(sesion["momentos_criticos"])
 
+        # Detectar si la entrevista se finalizó de manera incompleta/prematura
+        es_incompleta = sesion.get("tema_actual", 1) <= TOTAL_TEMAS
+        nota_incompleta = ""
+        if es_incompleta:
+            nota_incompleta = f"\n[NOTA IMPORTANTE: La entrevista fue finalizada prematuramente por el candidato. Solo se alcanzaron a responder algunas preguntas hasta el Tema {sesion['tema_actual']} de un total de {TOTAL_TEMAS}. Por favor, evalúa de forma justa y constructiva con base ÚNICAMENTE en el historial disponible. Agrega al inicio de tu 'resumen' el prefijo '[Entrevista Incompleta] ' y sugiere recomendaciones que incluyan terminar las futuras sesiones.]\n"
+
         # =====================================================
         # PILAR 1: Estabilidad Emocional (30 pts) - Python puro
         # =====================================================
@@ -375,6 +381,7 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
 
         prompt_reporte = f"""
         Eres un experto en Recursos Humanos evaluando una entrevista simulada.
+        {nota_incompleta}
         
         HISTORIAL COMPLETO DE LA ENTREVISTA:
         {historial_str}

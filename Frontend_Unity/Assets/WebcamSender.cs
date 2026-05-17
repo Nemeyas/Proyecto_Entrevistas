@@ -43,6 +43,7 @@ public class WebcamSender : MonoBehaviour
     // --- Variables de Estado y UI ---
     private bool procesandoPeticion = false;
     public GameObject botonFinalizar;
+    public Button botonSalirPrematuro;
     
     // --- Selección de Dispositivos ---
     public TMP_Dropdown dropdownCamara;
@@ -54,6 +55,15 @@ public class WebcamSender : MonoBehaviour
     {
         // El botón finalizar arranca apagado
         if (botonFinalizar != null) botonFinalizar.SetActive(false);
+        
+        if (botonSalirPrematuro != null)
+        {
+            botonSalirPrematuro.onClick.RemoveAllListeners();
+            botonSalirPrematuro.onClick.AddListener(() => {
+                SolicitarTerminoPrematuro();
+            });
+            botonSalirPrematuro.gameObject.SetActive(false);
+        }
         
         PoblarDispositivos();
     }
@@ -169,17 +179,30 @@ public class WebcamSender : MonoBehaviour
         // --- ¡AQUÍ ESTÁ LA MAGIA DEL SALUDO INICIAL! ---
         if (miGestorDeChat != null)
         {
+            miGestorDeChat.LimpiarChat(); // Limpiar el chat para que no se acumule con entrevistas anteriores
             miGestorDeChat.AgregarMensajeLog("Entrevistador", "Hola, bienvenido a la entrevista. Háblame de un desafío que hayas superado.", "#FFA500");
         }
         // -----------------------------------------------
 
         entrevistaIniciada = true;
+        if (botonFinalizar != null) botonFinalizar.SetActive(false); // El botón grande central arranca apagado
+        
+        if (botonSalirPrematuro != null)
+        {
+            botonSalirPrematuro.gameObject.SetActive(true);
+        }
+
         StartCoroutine(EnviarFotoRutinariamente());
     }
 
     public void DetenerCamara()
     {
         entrevistaIniciada = false;
+        if (botonFinalizar != null) botonFinalizar.SetActive(false);
+        if (botonSalirPrematuro != null)
+        {
+            botonSalirPrematuro.gameObject.SetActive(false);
+        }
         if (webcamTexture != null && webcamTexture.isPlaying)
         {
             webcamTexture.Stop();
@@ -318,6 +341,10 @@ public class WebcamSender : MonoBehaviour
                     // Si el backend dice que la entrevista terminó, finalizar automáticamente o mostrar botón
                     if (respuestaAudio.entrevista_terminada)
                     {
+                        if (botonSalirPrematuro != null)
+                        {
+                            botonSalirPrematuro.gameObject.SetActive(false);
+                        }
                         if (botonFinalizar != null)
                         {
                             botonFinalizar.SetActive(true); // Dar la señal visual al usuario
@@ -343,6 +370,71 @@ public class WebcamSender : MonoBehaviour
     {
         if (procesandoPeticion) return; // Evitar spam del botón
         StartCoroutine(EnviarPeticionFinalizar());
+    }
+
+    public void SolicitarTerminoPrematuro()
+    {
+        if (procesandoPeticion) return; // Evitar spam del botón
+        
+        DialogoTerminoPrematuro.Mostrar(
+            alGuardar: () => {
+                StartCoroutine(EnviarPeticionFinalizar());
+            },
+            alSalir: () => {
+                StartCoroutine(EnviarPeticionDescartar());
+            },
+            alCancelar: () => {
+                // No hacer nada
+            }
+        );
+    }
+
+    IEnumerator EnviarPeticionDescartar()
+    {
+        procesandoPeticion = true; // BLOQUEO DE UI
+        
+        if (textoDelBoton != null)
+        {
+            textoDelBoton.text = "Descartando...";
+            textoDelBoton.color = Color.red;
+        }
+
+        int idSimulacion = 0;
+        if (GestorNavegacion.Instancia != null)
+        {
+            idSimulacion = GestorNavegacion.Instancia.idSimulacionActiva;
+        }
+
+        if (idSimulacion != 0)
+        {
+            using (UnityWebRequest www = UnityWebRequest.Delete("http://localhost:8000/reporte/" + idSimulacion))
+            {
+                yield return www.SendWebRequest();
+                if (www.result == UnityWebRequest.Result.Success)
+                {
+                    Debug.Log($"[WebcamSender] Simulación {idSimulacion} descartada de la base de datos.");
+                }
+                else
+                {
+                    Debug.LogError($"[WebcamSender] Error al descartar simulación: {www.error}");
+                }
+            }
+        }
+
+        DetenerCamara();
+        
+        if (textoDelBoton != null)
+        {
+            textoDelBoton.text = "Hablar";
+            textoDelBoton.color = Color.black;
+        }
+
+        if (GestorNavegacion.Instancia != null)
+        {
+            GestorNavegacion.Instancia.MostrarMenu();
+        }
+
+        procesandoPeticion = false; // DESBLOQUEO DE UI
     }
 
     IEnumerator EnviarPeticionFinalizar()

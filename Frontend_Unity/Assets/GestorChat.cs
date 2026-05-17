@@ -16,8 +16,13 @@ public class GestorChat : MonoBehaviour
 
     void Awake()
     {
-        // Limpiamos el muro al arrancar ANTES de que otros scripts intenten escribir
-        if (txtMuroCompleto != null) txtMuroCompleto.text = ""; 
+        LimpiarChat();
+    }
+
+    public void LimpiarChat()
+    {
+        if (txtMuroCompleto != null) txtMuroCompleto.text = "";
+        if (txtUltimoMensaje != null) txtUltimoMensaje.text = "";
     }
 
     // NUEVO: Función para inyectar el saludo inicial directamente al muro
