@@ -49,6 +49,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\GestorMenuPrincipal.cs" />
+    <Compile Include="Assets\MenuButtonHover.cs" />
     <Compile Include="Assets\GestorHistorial.cs" />
     <Compile Include="Assets\GestorChat.cs" />
     <Compile Include="Assets\EntrevistadorAnimator.cs" />
