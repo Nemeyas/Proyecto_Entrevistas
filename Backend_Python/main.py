@@ -1,8 +1,12 @@
 import io
 import os
+import base64
+import struct
+import asyncio
 import speech_recognition as sr
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+import edge_tts
 import numpy as np
 import cv2
 from PIL import Image
@@ -59,6 +63,33 @@ except Exception as e:
     print(f">>> Advertencia: No se pudo conectar a la base de datos MySQL: {e}")
 
 app = FastAPI()
+
+# ==========================================
+# TEXT-TO-SPEECH (TTS) con edge-tts
+# ==========================================
+TTS_VOICE = "es-MX-JorgeNeural"  # Voz masculina mexicana profesional
+
+async def generar_tts_audio(texto: str) -> str:
+    """
+    Genera audio WAV a partir de texto usando edge-tts y lo devuelve como base64.
+    """
+    try:
+        # 1. Generar MP3 en memoria con edge-tts
+        communicate = edge_tts.Communicate(texto, TTS_VOICE)
+        mp3_buffer = io.BytesIO()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                mp3_buffer.write(chunk["data"])
+        mp3_buffer.seek(0)
+        
+        # 2. Codificar el MP3 directamente en base64
+        # Unity usará UnityWebRequestMultimedia para decodificar MP3
+        audio_base64 = base64.b64encode(mp3_buffer.read()).decode('utf-8')
+        print(f"🔊 TTS generado: {len(audio_base64)} chars base64")
+        return audio_base64
+    except Exception as e:
+        print(f"❌ Error generando TTS: {e}")
+        return ""
 
 # ==========================================
 # CONFIGURACIÓN DE LA ENTREVISTA
@@ -323,7 +354,10 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
                 sesion["textos_usuario_tema"] = []
                 sesion["respuestas_ia_tema"] = []
 
-            # 4. Devolver a Unity con info del estado de la entrevista
+            # 4. Generar audio TTS de la respuesta
+            audio_tts = await generar_tts_audio(respuesta_gemini)
+            
+            # 5. Devolver a Unity con info del estado de la entrevista
             entrevista_terminada = sesion["tema_actual"] > TOTAL_TEMAS
             return JSONResponse(content={
                 "status": "exito", 
@@ -333,15 +367,34 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
                 "tema_actual": sesion["tema_actual"],
                 "pregunta_en_tema": sesion["pregunta_en_tema"],
                 "tema_completado": sesion["pregunta_en_tema"] == 0 and sesion["tema_actual"] > 1,
-                "entrevista_terminada": entrevista_terminada
+                "entrevista_terminada": entrevista_terminada,
+                "audio_tts": audio_tts
             })
             
     except sr.UnknownValueError:
         print("❌ No se entendió el audio")
-        return JSONResponse(content={"status": "error", "respuesta_ia": "¿Podrías repetir eso? No te escuché bien.", "animacion_entrevistador": "idle"})
+        texto_error = "¿Podrías repetir eso? No te escuché bien."
+        audio_error = await generar_tts_audio(texto_error)
+        return JSONResponse(content={"status": "error", "respuesta_ia": texto_error, "animacion_entrevistador": "idle", "audio_tts": audio_error})
     except Exception as e:
         print(f"❌ Error en audio: {e}")
-        return JSONResponse(content={"status": "error", "respuesta_ia": "Hubo un error de conexión, continuemos.", "animacion_entrevistador": "idle"})
+        texto_error2 = "Hubo un error de conexión, continuemos."
+        audio_error2 = await generar_tts_audio(texto_error2)
+        return JSONResponse(content={"status": "error", "respuesta_ia": texto_error2, "animacion_entrevistador": "idle", "audio_tts": audio_error2})
+
+
+# ==========================================
+# RUTA 3: TTS PARA SALUDO INICIAL
+# ==========================================
+@app.post("/generar_saludo_tts")
+async def generar_saludo_tts(texto: str = Form(...)):
+    """Genera audio TTS para un texto dado (usado para el saludo inicial)."""
+    try:
+        audio_tts = await generar_tts_audio(texto)
+        return JSONResponse(content={"status": "exito", "audio_tts": audio_tts})
+    except Exception as e:
+        print(f"❌ Error generando saludo TTS: {e}")
+        return JSONResponse(content={"status": "error", "mensaje": str(e)})
 
 
 @app.post("/finalizar_entrevista")

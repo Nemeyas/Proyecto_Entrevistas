@@ -21,6 +21,14 @@ public class RespuestaServidorAudio
     public string respuesta_ia;
     public string animacion_entrevistador;
     public bool entrevista_terminada;
+    public string audio_tts;
+}
+
+[System.Serializable]
+public class RespuestaSaludoTTS
+{
+    public string status;
+    public string audio_tts;
 }
 
 public class WebcamSender : MonoBehaviour
@@ -29,6 +37,7 @@ public class WebcamSender : MonoBehaviour
     public string serverURL_Emocion = "http://localhost:8000/analizar_emocion";
     public string serverURL_Audio = "http://localhost:8000/procesar_audio";
     public string serverURL_Finalizar = "http://localhost:8000/finalizar_entrevista";
+    public string serverURL_SaludoTTS = "http://localhost:8000/generar_saludo_tts";
     public RawImage pantallaCamara;
     public TextMeshProUGUI textoEmocion; 
     
@@ -48,6 +57,10 @@ public class WebcamSender : MonoBehaviour
     // --- Selección de Dispositivos ---
     public TMP_Dropdown dropdownCamara;
     public TMP_Dropdown dropdownMicrofono;
+    
+    // --- TTS (Text-to-Speech) ---
+    private AudioSource audioSourceTTS;
+    
     private string nombreCamaraSeleccionada = "";
     private string nombreMicrofonoSeleccionado = "";
 
@@ -64,6 +77,14 @@ public class WebcamSender : MonoBehaviour
             });
             botonSalirPrematuro.gameObject.SetActive(false);
         }
+        
+        // --- Inicializar AudioSource para TTS ---
+        audioSourceTTS = gameObject.GetComponent<AudioSource>();
+        if (audioSourceTTS == null)
+        {
+            audioSourceTTS = gameObject.AddComponent<AudioSource>();
+        }
+        audioSourceTTS.playOnAwake = false;
         
         PoblarDispositivos();
     }
@@ -177,11 +198,14 @@ public class WebcamSender : MonoBehaviour
         webcamTexture.Play();
 
         // --- ¡AQUÍ ESTÁ LA MAGIA DEL SALUDO INICIAL! ---
+        string textoSaludo = "Hola, bienvenido a la entrevista. Háblame de un desafío que hayas superado.";
         if (miGestorDeChat != null)
         {
             miGestorDeChat.LimpiarChat(); // Limpiar el chat para que no se acumule con entrevistas anteriores
-            miGestorDeChat.AgregarMensajeLog("Entrevistador", "Hola, bienvenido a la entrevista. Háblame de un desafío que hayas superado.", "#FFA500");
+            miGestorDeChat.AgregarMensajeLog("Entrevistador", textoSaludo, "#FFA500");
         }
+        // --- Generar TTS para el saludo ---
+        StartCoroutine(PedirSaludoTTS(textoSaludo));
         // -----------------------------------------------
 
         entrevistaIniciada = true;
@@ -203,6 +227,7 @@ public class WebcamSender : MonoBehaviour
         {
             botonSalirPrematuro.gameObject.SetActive(false);
         }
+        DetenerTTS(); // Cortar cualquier TTS en reproducción
         if (webcamTexture != null && webcamTexture.isPlaying)
         {
             webcamTexture.Stop();
@@ -262,6 +287,9 @@ public class WebcamSender : MonoBehaviour
 
         if (!estaGrabando)
         {
+            // --- CORTAR TTS INMEDIATAMENTE al presionar Hablar ---
+            DetenerTTS();
+            
             estaGrabando = true;
             textoDelBoton.text = "🔴 Grabando...";
             textoDelBoton.color = Color.red;
@@ -324,6 +352,12 @@ public class WebcamSender : MonoBehaviour
                     if (miGestorDeChat != null)
                     {
                         miGestorDeChat.ActualizarConversacion(respuestaAudio.transcripcion, respuestaAudio.respuesta_ia);
+                    }
+
+                    // --- Reproducir TTS de la respuesta ---
+                    if (!string.IsNullOrEmpty(respuestaAudio.audio_tts))
+                    {
+                        StartCoroutine(ReproducirTTSDesdeBase64(respuestaAudio.audio_tts));
                     }
 
                     if (miEntrevistadorAnimator != null)
@@ -514,5 +548,89 @@ public class WebcamSender : MonoBehaviour
             writer.Write((short)(sample * short.MaxValue));
         }
         return stream.ToArray();
+    }
+
+    // ==========================================
+    // TTS (Text-to-Speech) - Métodos auxiliares
+    // ==========================================
+
+    /// <summary>
+    /// CORTA INMEDIATAMENTE cualquier audio TTS en reproducción.
+    /// Se llama al presionar "Hablar" para una experiencia fluida.
+    /// </summary>
+    public void DetenerTTS()
+    {
+        if (audioSourceTTS != null && audioSourceTTS.isPlaying)
+        {
+            audioSourceTTS.Stop();
+            audioSourceTTS.clip = null;
+            Debug.Log("[TTS] Audio cortado por el usuario.");
+        }
+    }
+
+    /// <summary>
+    /// Decodifica audio MP3 en base64, lo guarda temporalmente y lo reproduce.
+    /// Unity necesita UnityWebRequestMultimedia para decodificar MP3.
+    /// </summary>
+    IEnumerator ReproducirTTSDesdeBase64(string base64Audio)
+    {
+        if (string.IsNullOrEmpty(base64Audio)) yield break;
+
+        byte[] audioBytes = System.Convert.FromBase64String(base64Audio);
+
+        // Guardar temporalmente como archivo MP3 para que Unity lo decodifique
+        string tempPath = Path.Combine(Application.temporaryCachePath, "tts_response.mp3");
+        File.WriteAllBytes(tempPath, audioBytes);
+
+        // Cargar el MP3 usando UnityWebRequestMultimedia
+        string fileUrl = "file:///" + tempPath.Replace("\\", "/");
+        using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(fileUrl, AudioType.MPEG))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                AudioClip clipTTS = DownloadHandlerAudioClip.GetContent(www);
+                if (clipTTS != null && audioSourceTTS != null)
+                {
+                    audioSourceTTS.clip = clipTTS;
+                    audioSourceTTS.Play();
+                    Debug.Log($"[TTS] Reproduciendo audio ({clipTTS.length:F1}s)");
+                }
+            }
+            else
+            {
+                Debug.LogError($"[TTS] Error cargando audio: {www.error}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Solicita al backend que genere TTS para el saludo inicial.
+    /// </summary>
+    IEnumerator PedirSaludoTTS(string textoSaludo)
+    {
+        WWWForm form = new WWWForm();
+        form.AddField("texto", textoSaludo);
+
+        using (UnityWebRequest www = UnityWebRequest.Post(serverURL_SaludoTTS, form))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                string jsonString = www.downloadHandler.text;
+                RespuestaSaludoTTS respuesta = JsonUtility.FromJson<RespuestaSaludoTTS>(jsonString);
+
+                if (respuesta.status == "exito" && !string.IsNullOrEmpty(respuesta.audio_tts))
+                {
+                    StartCoroutine(ReproducirTTSDesdeBase64(respuesta.audio_tts));
+                }
+            }
+            else
+            {
+                Debug.LogError($"[TTS] Error pidiendo saludo TTS: {www.error}");
+            }
+        }
     }
 }
