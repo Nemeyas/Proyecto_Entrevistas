@@ -87,6 +87,112 @@ public class WebcamSender : MonoBehaviour
         audioSourceTTS.playOnAwake = false;
         
         PoblarDispositivos();
+        ReemplazarMesa();
+    }
+
+    void ReemplazarMesa()
+    {
+        string path = System.IO.Path.Combine(Application.dataPath, "MESA DEFINITIVA.png");
+        if (System.IO.File.Exists(path))
+        {
+            byte[] fileData = System.IO.File.ReadAllBytes(path);
+            Texture2D tex = new Texture2D(2, 2);
+            tex.LoadImage(fileData);
+            Sprite nuevoSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+
+            bool encontrada = false;
+
+            Transform interviewPanel = dropdownCamara != null ? dropdownCamara.transform : null;
+            if (interviewPanel != null)
+            {
+                while (interviewPanel.parent != null && interviewPanel.parent.GetComponent<Canvas>() == null)
+                {
+                    interviewPanel = interviewPanel.parent;
+                }
+            }
+
+            // Buscar la mesa real por sus proporciones: ancha, no muy alta, ubicada en la parte inferior
+            UnityEngine.UI.Image[] imagenes = FindObjectsOfType<UnityEngine.UI.Image>(true);
+            foreach (var img in imagenes)
+            {
+                if (interviewPanel != null && !img.transform.IsChildOf(interviewPanel)) continue;
+
+                RectTransform rt = img.rectTransform;
+                if (rt.rect.width > 600 && rt.rect.height < 400 && img.gameObject.name != "Background")
+                {
+                    Vector3[] corners = new Vector3[4];
+                    rt.GetWorldCorners(corners);
+                    float centerY = (corners[0].y + corners[1].y) / 2f;
+                    
+                    if (centerY < Screen.height * 0.4f)
+                    {
+                        float oldBottomY = corners[0].y;
+                        
+                        img.sprite = nuevoSprite;
+                        img.color = Color.white;
+                        
+                        float targetHeight = rt.rect.width * ((float)tex.height / tex.width);
+                        rt.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
+                        Canvas.ForceUpdateCanvases();
+                        
+                        rt.GetWorldCorners(corners);
+                        float newBottomY = corners[0].y;
+                        
+                        // Bajar la mesa un poco (ajustado para que esté un poquito más arriba que antes)
+                        float offsetHaciaAbajo = Screen.height * 0.07f; 
+                        rt.position += new Vector3(0, (oldBottomY - newBottomY) - offsetHaciaAbajo, 0);
+
+                        Debug.Log($"[ÉXITO] Mesa Image reemplazada y bajada: {img.name}");
+                        encontrada = true;
+                    }
+                }
+            }
+
+            UnityEngine.UI.RawImage[] rawImagenes = FindObjectsOfType<UnityEngine.UI.RawImage>(true);
+            foreach (var rImg in rawImagenes)
+            {
+                if (interviewPanel != null && !rImg.transform.IsChildOf(interviewPanel)) continue;
+
+                RectTransform rt = rImg.rectTransform;
+                if (rt.rect.width > 600 && rt.rect.height < 400 && rImg.gameObject.name != "Background")
+                {
+                    Vector3[] corners = new Vector3[4];
+                    rt.GetWorldCorners(corners);
+                    float centerY = (corners[0].y + corners[1].y) / 2f;
+                    
+                    if (centerY < Screen.height * 0.4f)
+                    {
+                        float oldBottomY = corners[0].y;
+                        
+                        rImg.texture = tex;
+                        rImg.color = Color.white;
+                        
+                        float targetHeight = rt.rect.width * ((float)tex.height / tex.width);
+                        rt.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
+                        Canvas.ForceUpdateCanvases();
+                        
+                        rt.GetWorldCorners(corners);
+                        float newBottomY = corners[0].y;
+                        
+                        // Bajar la mesa un poco (ajustado para que esté un poquito más arriba que antes)
+                        float offsetHaciaAbajo = Screen.height * 0.07f; 
+                        rt.position += new Vector3(0, (oldBottomY - newBottomY) - offsetHaciaAbajo, 0);
+
+                        Debug.Log($"[ÉXITO] Mesa RawImage reemplazada y bajada: {rImg.name}");
+                        encontrada = true;
+                    }
+                }
+            }
+
+            if (!encontrada)
+            {
+                Debug.LogWarning("No se encontró una mesa vieja para reemplazar.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"No se encontró la imagen de la mesa en: {path}");
+        }
     }
 
     void PoblarDispositivos()
