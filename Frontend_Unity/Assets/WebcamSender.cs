@@ -347,7 +347,7 @@ public class WebcamSender : MonoBehaviour
                 string jsonString = www.downloadHandler.text;
                 RespuestaServidorAudio respuestaAudio = JsonUtility.FromJson<RespuestaServidorAudio>(jsonString);
                 
-                if (respuestaAudio.status == "exito")
+                if (respuestaAudio.status == "exito" || respuestaAudio.status == "gemini_caido")
                 {
                     if (miGestorDeChat != null)
                     {
@@ -390,6 +390,13 @@ public class WebcamSender : MonoBehaviour
                         }
                         procesandoPeticion = false; // DESBLOQUEO DE UI
                         yield break;
+                    }
+                    
+                    if (respuestaAudio.status == "gemini_caido")
+                    {
+                        textoDelBoton.text = "Gemini Caído";
+                        textoDelBoton.color = Color.red;
+                        yield return new WaitForSeconds(3f);
                     }
                 }
             }

@@ -2,6 +2,7 @@ import io
 import os
 import base64
 import struct
+import time
 import asyncio
 import speech_recognition as sr
 from fastapi import FastAPI, UploadFile, File, Form
@@ -29,6 +30,46 @@ if not api_key or api_key == "PONER_TU_API_KEY_AQUI":
     print("=" * 50)
 
 client = genai.Client(api_key=api_key or "")
+
+# ==========================================
+# SISTEMA DE REINTENTOS PARA GEMINI
+# ==========================================
+MAX_REINTENTOS_GEMINI = 5
+ESPERA_INICIAL_GEMINI = 2  # segundos
+
+def llamar_gemini_con_reintentos(prompt: str, modelo: str = 'gemini-2.5-flash') -> str:
+    """
+    Llama a Gemini con reintentos automáticos y backoff exponencial.
+    Si Gemini está sobrecargado (503), reintenta hasta MAX_REINTENTOS_GEMINI veces.
+    """
+    ultimo_error = None
+    for intento in range(1, MAX_REINTENTOS_GEMINI + 1):
+        try:
+            response = client.models.generate_content(
+                model=modelo,
+                contents=prompt,
+            )
+            return response.text.strip()
+        except Exception as e:
+            ultimo_error = e
+            error_str = str(e).lower()
+            # Detectar errores de sobrecarga/disponibilidad de Gemini
+            es_sobrecarga = any(palabra in error_str for palabra in [
+                '503', 'unavailable', 'overloaded', 'resource exhausted',
+                'rate limit', '429', 'quota', 'high demand', 'temporarily'
+            ])
+            if es_sobrecarga and intento < MAX_REINTENTOS_GEMINI:
+                espera = ESPERA_INICIAL_GEMINI * (2 ** (intento - 1))  # 2, 4, 8, 16...
+                print(f"⚠️ Gemini sobrecargado (intento {intento}/{MAX_REINTENTOS_GEMINI}). Reintentando en {espera}s...")
+                time.sleep(espera)
+            elif not es_sobrecarga:
+                # Error no relacionado con sobrecarga, lanzar inmediatamente
+                raise e
+            else:
+                # Último intento fallido
+                print(f"❌ Gemini sigue caído después de {MAX_REINTENTOS_GEMINI} intentos.")
+                raise e
+    raise ultimo_error
 
 # Variable global para recordar la emoción
 ultima_emocion_detectada = "neutral"
@@ -300,13 +341,21 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             Ejemplo: {{"respuesta": "Excelente respuesta, me gusta tu enfoque.", "animacion": "clap"}}
             """
             
-            # Llamada al modelo
-            response = client.models.generate_content(
-                model='gemini-2.5-flash', 
-                contents=prompt_sistema,
-            )
+            # Llamada al modelo con reintentos automáticos
+            try:
+                respuesta_cruda_raw = llamar_gemini_con_reintentos(prompt_sistema)
+            except Exception as gemini_error:
+                print(f"❌ Gemini caído permanentemente: {gemini_error}")
+                texto_caido = "Gemini está temporalmente fuera de servicio. Por favor, intenta de nuevo en unos segundos."
+                audio_caido = await generar_tts_audio(texto_caido)
+                return JSONResponse(content={
+                    "status": "gemini_caido",
+                    "respuesta_ia": texto_caido,
+                    "animacion_entrevistador": "idle",
+                    "audio_tts": audio_caido
+                })
             
-            respuesta_cruda = response.text.strip()
+            respuesta_cruda = respuesta_cruda_raw
             if respuesta_cruda.startswith("```json"):
                 respuesta_cruda = respuesta_cruda[7:-3].strip()
             elif respuesta_cruda.startswith("```"):
@@ -462,12 +511,16 @@ async def finalizar_entrevista(id_simulacion: int = Form(...)):
         {{"claridad": 20, "competencia": 18, "profesionalismo": 16, "resumen": "...", "estado_emocional": "...", "recomendaciones": ["..."], "momentos_criticos": [{{"pregunta": "...", "observacion": "..."}}]}}
         """
         
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt_reporte,
-        )
+        try:
+            reporte_raw = llamar_gemini_con_reintentos(prompt_reporte)
+        except Exception as gemini_error:
+            print(f"❌ Gemini caído al generar reporte: {gemini_error}")
+            return JSONResponse(content={
+                "status": "gemini_caido",
+                "mensaje": "Gemini está temporalmente fuera de servicio. Intenta generar el reporte de nuevo en unos segundos."
+            })
         
-        reporte_json = response.text.strip()
+        reporte_json = reporte_raw
         if reporte_json.startswith("```json"):
             reporte_json = reporte_json[7:-3].strip()
         elif reporte_json.startswith("```"):
