@@ -89,7 +89,7 @@ echo [4/4] Instalando dependencias (esto puede tardar varios minutos)...
 echo        Descargando HSEmotion ONNX, OpenCV, etc.
 echo.
 
-venv\Scripts\pip.exe install fastapi uvicorn opencv-python hsemotion-onnx onnxruntime SpeechRecognition google-genai python-multipart numpy python-dotenv 2>&1 | findstr /i "successfully error"
+venv\Scripts\pip.exe install fastapi uvicorn opencv-python hsemotion-onnx onnxruntime SpeechRecognition google-genai python-multipart numpy python-dotenv edge-tts mysql-connector-python pillow 2>&1 | findstr /i "successfully error"
 
 if %errorlevel% neq 0 (
     echo.
@@ -110,7 +110,7 @@ echo        Descargando modelo de IA para emociones (solo la primera vez)...
 venv\Scripts\python.exe -c "from hsemotion_onnx.facial_emotions import HSEmotionRecognizer; HSEmotionRecognizer(model_name='enet_b0_8_best_afew'); print('        Modelo descargado. OK')"
 
 :: Verificar que todo se instalo correctamente
-venv\Scripts\python.exe -c "import cv2; import fastapi; import hsemotion_onnx; import speech_recognition; import google.genai; import uvicorn; print('OK')" >nul 2>&1
+venv\Scripts\python.exe -c "import cv2; import fastapi; import hsemotion_onnx; import speech_recognition; import google.genai; import uvicorn; import edge_tts; import mysql.connector; from PIL import Image; print('OK')" >nul 2>&1
 if %errorlevel% equ 0 (
     echo.
     echo ==================================================
@@ -134,7 +134,7 @@ if %errorlevel% equ 0 (
     echo  Intenta ejecutar manualmente:
     echo.
     echo    cd Backend_Python
-    echo    venv\Scripts\pip.exe install fastapi uvicorn opencv-python hsemotion-onnx onnxruntime SpeechRecognition google-genai python-multipart numpy python-dotenv
+    echo    venv\Scripts\pip.exe install fastapi uvicorn opencv-python hsemotion-onnx onnxruntime SpeechRecognition google-genai python-multipart numpy python-dotenv edge-tts mysql-connector-python pillow
     echo.
     echo ==================================================
 )

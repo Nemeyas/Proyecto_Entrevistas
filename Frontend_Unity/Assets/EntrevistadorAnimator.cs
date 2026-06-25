@@ -3,23 +3,50 @@ using System.Collections;
 
 /// <summary>
 /// Controla las animaciones del entrevistador 3D.
-/// Reacciona a las emociones del candidato y activa animación de habla.
-/// Asignar este script al GameObject del modelo 3D del entrevistador.
-/// 
-/// Las animaciones NO-idle se reproducen una sola vez y luego el entrevistador
-/// vuelve automáticamente al estado Idle (mirando la pantalla).
+/// El modelo permanece en Idle (respirando) el 80% del tiempo.
+/// Cuando recibe texto/eventos, hace un gesto sutil y rápido,
+/// y luego vuelve al Idle inmediatamente.
+/// El entrevistador mantiene la vista hacia la persona la mayor parte del tiempo.
 /// </summary>
 public class EntrevistadorAnimator : MonoBehaviour
 {
     private Animator animator;
-    private Coroutine corutinaRetornoIdle;
+    private Coroutine corutinaGesto;
 
     // Nombre del estado Idle en el Animator Controller (Base Layer)
     private const string ESTADO_IDLE = "Idle";
 
-    // Emociones que se consideran "positivas" y "negativas"
-    private readonly string[] emocionesPositivas = { "happy", "surprise" };
-    private readonly string[] emocionesNegativas = { "angry", "sad", "fear", "disgust" };
+    // Configuración del gesto sutil
+    [Header("Configuración de Gesto Sutil")]
+    [Tooltip("Duración máxima del gesto antes de volver a Idle (en segundos)")]
+    public float duracionGesto = 0.4f;
+
+    [Tooltip("Velocidad de transición suave de vuelta a Idle")]
+    public float velocidadTransicion = 0.15f;
+
+    // Control de mirada hacia la persona (cámara)
+    [Header("Seguimiento de Mirada")]
+    [Tooltip("Transform de la cabeza del modelo (asignar en Inspector)")]
+    public Transform huezoCabeza;
+
+    [Tooltip("Objetivo de mirada (cámara principal si no se asigna)")]
+    public Transform objetivoMirada;
+
+    [Tooltip("Porcentaje del tiempo mirando al objetivo (0.0 - 1.0)")]
+    [Range(0f, 1f)]
+    public float porcentajeMirada = 0.8f;
+
+    [Tooltip("Peso del seguimiento de mirada (0 = nada, 1 = total)")]
+    [Range(0f, 1f)]
+    public float pesoMirada = 0.6f;
+
+    [Tooltip("Velocidad de suavizado de la mirada")]
+    public float suavizadoMirada = 3f;
+
+    private float pesoMiradaActual = 0f;
+    private bool mirandoObjetivo = true;
+    private float temporizadorMirada = 0f;
+    private float duracionMiradaActual = 3f;
 
     void Start()
     {
@@ -28,171 +55,204 @@ public class EntrevistadorAnimator : MonoBehaviour
         {
             Debug.LogError("[EntrevistadorAnimator] No se encontro el componente Animator. Asegurate de asignarlo.");
         }
+
+        // Si no se asignó un objetivo de mirada, usar la cámara principal
+        if (objetivoMirada == null && Camera.main != null)
+        {
+            objetivoMirada = Camera.main.transform;
+        }
+    }
+
+    void Update()
+    {
+        ActualizarCicloMirada();
+    }
+
+    void LateUpdate()
+    {
+        AplicarMirada();
+    }
+
+    // =========================================================================
+    // Lógica de mirada natural (80% mirando a la persona)
+    // =========================================================================
+
+    /// <summary>
+    /// Alterna de forma natural entre mirar al objetivo y mirar ligeramente a otro lado.
+    /// Simula un patrón de mirada humano donde mira ~80% del tiempo a la persona.
+    /// </summary>
+    private void ActualizarCicloMirada()
+    {
+        temporizadorMirada -= Time.deltaTime;
+
+        if (temporizadorMirada <= 0f)
+        {
+            // Decidir si mirar al objetivo o no, respetando el porcentaje configurado
+            mirandoObjetivo = Random.value < porcentajeMirada;
+
+            // Duración aleatoria para que se sienta natural
+            if (mirandoObjetivo)
+            {
+                duracionMiradaActual = Random.Range(2f, 5f); // Mira al candidato entre 2 y 5 segundos
+            }
+            else
+            {
+                duracionMiradaActual = Random.Range(0.5f, 1.5f); // Desvía la mirada brevemente
+            }
+
+            temporizadorMirada = duracionMiradaActual;
+        }
+
+        // Suavizar la transición del peso de mirada
+        float pesoObjetivo = mirandoObjetivo ? pesoMirada : 0f;
+        pesoMiradaActual = Mathf.Lerp(pesoMiradaActual, pesoObjetivo, Time.deltaTime * suavizadoMirada);
     }
 
     /// <summary>
-    /// Activa la animación de "hablando" (cuando Gemini responde).
-    /// Llamado desde WebcamSender cuando llega la respuesta del servidor.
+    /// Aplica la rotación de la cabeza hacia el objetivo de mirada.
+    /// Se ejecuta en LateUpdate para sobreescribir la animación del Animator.
+    /// </summary>
+    private void AplicarMirada()
+    {
+        if (huezoCabeza == null || objetivoMirada == null) return;
+        if (pesoMiradaActual < 0.01f) return;
+
+        // Calcular la dirección hacia el objetivo
+        Vector3 direccionAlObjetivo = objetivoMirada.position - huezoCabeza.position;
+        Quaternion rotacionObjetivo = Quaternion.LookRotation(direccionAlObjetivo);
+
+        // Mezclar la rotación de la animación con la mirada
+        huezoCabeza.rotation = Quaternion.Slerp(huezoCabeza.rotation, rotacionObjetivo, pesoMiradaActual);
+    }
+
+    // =========================================================================
+    // Interfaz pública — Gesto sutil al recibir eventos
+    // =========================================================================
+
+    /// <summary>
+    /// Activa un gesto sutil cuando el entrevistador "habla" (cuando Gemini responde).
+    /// El gesto es brevísimo: perturba ligeramente la animación y vuelve rápido a Idle.
     /// </summary>
     public void ActivarHabla()
     {
-        if (animator != null)
-        {
-            animator.SetTrigger("Hablar");
-            Debug.Log("[Entrevistador] Animacion: Hablando");
-            ProgramarRetornoAIdle();
-        }
+        RealizarGestoSutil();
+        Debug.Log("[Entrevistador] Gesto sutil: recibió respuesta IA");
     }
 
     /// <summary>
-    /// Recibe la emoción del candidato y reacciona con una animación.
-    /// Llamado desde WebcamSender cuando llega el análisis de emoción.
+    /// Recibe la emoción del candidato. En esta versión simplificada,
+    /// solo hace un gesto sutil sin importar la emoción.
+    /// El entrevistador se mantiene sereno y en Idle.
     /// </summary>
     public void ReaccionarAEmocion(string emocion)
     {
-        if (animator == null) return;
-
-        string em = emocion.ToLower();
-
-        // Revisar si es positiva
-        foreach (string positiva in emocionesPositivas)
-        {
-            if (em == positiva)
-            {
-                animator.SetTrigger("Positivo");
-                Debug.Log($"[Entrevistador] Reaccion positiva a: {emocion}");
-                ProgramarRetornoAIdle();
-                return;
-            }
-        }
-
-        // Revisar si es negativa
-        foreach (string negativa in emocionesNegativas)
-        {
-            if (em == negativa)
-            {
-                // animator.SetTrigger("Negativo"); // Trigger 'Negativo' does not exist in controller
-                Debug.Log($"[Entrevistador] Reaccion negativa a: {emocion}");
-                return;
-            }
-        }
-
-        // Neutral: no hacer nada especial
-        Debug.Log($"[Entrevistador] Emocion neutral: {emocion}");
+        // En la versión simplificada no reacciona visiblemente a emociones.
+        // Solo logea para debug.
+        Debug.Log($"[Entrevistador] Emocion detectada (sin reaccion visible): {emocion}");
     }
 
     /// <summary>
-    /// Ejecuta una animación específica solicitada por la IA (ej. "idle", "talking", "laughing", "clap").
+    /// Ejecuta una animación solicitada por la IA.
+    /// En esta versión simplificada, todas las solicitudes resultan en un gesto sutil
+    /// que rápidamente vuelve a Idle (respiración).
     /// </summary>
     public void EjecutarAnimacionIA(string animacion)
     {
-        if (animator == null || string.IsNullOrEmpty(animacion)) return;
+        if (string.IsNullOrEmpty(animacion)) return;
 
         string anim = animacion.ToLower();
-        
-        if (anim == "talking")
+
+        if (anim == "idle")
         {
-            animator.SetTrigger("Hablar");
-            Debug.Log("[Entrevistador] Animacion: Hablando");
-            ProgramarRetornoAIdle();
-        }
-        else if (anim == "laughing" || anim == "clap")
-        {
-            animator.SetTrigger("Positivo");
-            Debug.Log("[Entrevistador] Animacion: Riendo/Positivo");
-            ProgramarRetornoAIdle();
-        }
-        else if (anim == "idle")
-        {
+            // Si piden idle explícitamente, quedarse en idle sin gesto
             VolverAIdleInmediato();
-            Debug.Log("[Entrevistador] Animacion: Idle");
+            Debug.Log("[Entrevistador] Solicitado: Idle");
         }
         else
         {
-            // Fallback a hablar
-            animator.SetTrigger("Hablar");
-            ProgramarRetornoAIdle();
+            // Cualquier otra animación → gesto sutil y de vuelta a idle
+            RealizarGestoSutil();
+            Debug.Log($"[Entrevistador] Gesto sutil por solicitud: {animacion}");
         }
     }
 
     // =========================================================================
-    // Lógica de retorno automático a Idle
+    // Gesto sutil — Perturbación breve que vuelve rápido a Idle
     // =========================================================================
 
     /// <summary>
-    /// Inicia la coroutine que espera a que la animación actual termine
-    /// una reproducción completa y luego fuerza la transición a Idle.
-    /// Si ya hay una coroutine en curso, la cancela para evitar conflictos.
+    /// Realiza un gesto sutil: activa brevemente una variación de la animación
+    /// y vuelve rápidamente al Idle (respiración).
+    /// Esto crea un movimiento ligero que se siente natural sin romper la pose.
     /// </summary>
-    private void ProgramarRetornoAIdle()
+    private void RealizarGestoSutil()
     {
-        if (corutinaRetornoIdle != null)
+        if (animator == null) return;
+
+        // Cancelar cualquier gesto previo en curso
+        if (corutinaGesto != null)
         {
-            StopCoroutine(corutinaRetornoIdle);
+            StopCoroutine(corutinaGesto);
         }
-        corutinaRetornoIdle = StartCoroutine(EsperarYVolverAIdle());
+
+        corutinaGesto = StartCoroutine(GestoSutilCoroutine());
     }
 
     /// <summary>
-    /// Coroutine que:
-    /// 1. Espera un frame para que el trigger sea consumido por el Animator.
-    /// 2. Espera a que el Animator entre en un estado que NO sea Idle.
-    /// 3. Espera a que la animación termine un ciclo completo (normalizedTime >= 1).
-    /// 4. Hace CrossFade suave de vuelta al estado Idle.
+    /// Coroutine que simula un gesto sutil:
+    /// 1. Cambia brevemente la velocidad de la animación Idle para crear un "micro-movimiento".
+    /// 2. Después de un breve instante, restaura todo al estado normal.
+    /// Esto genera un movimiento perceptible pero que no rompe la pose de respiración.
     /// </summary>
-    private IEnumerator EsperarYVolverAIdle()
+    private IEnumerator GestoSutilCoroutine()
     {
-        // Dar un par de frames para que el Animator procese el trigger
-        yield return null;
-        yield return null;
+        // Opción 1: Usar variación de velocidad en el Idle para crear micro-gesto
+        // Esto es más sutil que cambiar de estado y evita problemas de transición
+        float velocidadOriginal = animator.speed;
 
+        // Acelerar brevemente para crear un movimiento perceptible
+        animator.speed = 1.8f;
+
+        yield return new WaitForSeconds(duracionGesto);
+
+        // Volver a velocidad normal suavemente
+        float tiempoRestauracion = 0.3f;
+        float tiempoTranscurrido = 0f;
+
+        while (tiempoTranscurrido < tiempoRestauracion)
+        {
+            tiempoTranscurrido += Time.deltaTime;
+            animator.speed = Mathf.Lerp(1.8f, velocidadOriginal, tiempoTranscurrido / tiempoRestauracion);
+            yield return null;
+        }
+
+        animator.speed = velocidadOriginal;
+
+        // Asegurarse de que estamos en Idle
         AnimatorStateInfo estadoActual = animator.GetCurrentAnimatorStateInfo(0);
-
-        // Esperar a que realmente entre en un estado diferente a Idle
-        float tiempoEspera = 0f;
-        while (estadoActual.IsName(ESTADO_IDLE) && tiempoEspera < 2f)
+        if (!estadoActual.IsName(ESTADO_IDLE))
         {
-            yield return null;
-            tiempoEspera += Time.deltaTime;
-            estadoActual = animator.GetCurrentAnimatorStateInfo(0);
+            animator.CrossFade(ESTADO_IDLE, velocidadTransicion);
         }
 
-        // Si después de 2 segundos sigue en Idle, no hay nada que hacer
-        if (estadoActual.IsName(ESTADO_IDLE))
-        {
-            corutinaRetornoIdle = null;
-            yield break;
-        }
-
-        // Ahora esperar a que la animación termine un ciclo completo
-        // normalizedTime >= 1.0 significa que completó al menos una reproducción
-        while (animator.GetCurrentAnimatorStateInfo(0).normalizedTime < 0.95f)
-        {
-            yield return null;
-        }
-
-        // Transición suave de vuelta a Idle
-        animator.CrossFade(ESTADO_IDLE, 0.25f);
-        Debug.Log("[Entrevistador] Retorno automatico a Idle");
-
-        corutinaRetornoIdle = null;
+        corutinaGesto = null;
     }
 
     /// <summary>
     /// Fuerza la vuelta a Idle inmediatamente (con transición suave).
-    /// Útil cuando se solicita explícitamente "idle".
     /// </summary>
     private void VolverAIdleInmediato()
     {
-        if (corutinaRetornoIdle != null)
+        if (corutinaGesto != null)
         {
-            StopCoroutine(corutinaRetornoIdle);
-            corutinaRetornoIdle = null;
+            StopCoroutine(corutinaGesto);
+            corutinaGesto = null;
         }
 
         if (animator != null)
         {
-            animator.CrossFade(ESTADO_IDLE, 0.25f);
+            animator.speed = 1f;
+            animator.CrossFade(ESTADO_IDLE, velocidadTransicion);
         }
     }
 }
