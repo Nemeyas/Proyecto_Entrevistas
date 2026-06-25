@@ -93,6 +93,18 @@ public class WebcamSender : MonoBehaviour
     {
         if (dropdownCamara != null)
         {
+            // Evitar que nombres muy largos hagan wrap y se sobrepongan
+            if (dropdownCamara.itemText != null) 
+            { 
+                dropdownCamara.itemText.enableWordWrapping = false; 
+                dropdownCamara.itemText.overflowMode = TextOverflowModes.Ellipsis; 
+            }
+            if (dropdownCamara.captionText != null) 
+            { 
+                dropdownCamara.captionText.enableWordWrapping = false; 
+                dropdownCamara.captionText.overflowMode = TextOverflowModes.Ellipsis; 
+            }
+
             dropdownCamara.ClearOptions();
             System.Collections.Generic.List<string> opcionesCamara = new System.Collections.Generic.List<string>();
             WebCamDevice[] dispositivosCamara = WebCamTexture.devices;
@@ -122,6 +134,18 @@ public class WebcamSender : MonoBehaviour
 
         if (dropdownMicrofono != null)
         {
+            // Evitar que nombres muy largos hagan wrap y se sobrepongan
+            if (dropdownMicrofono.itemText != null) 
+            { 
+                dropdownMicrofono.itemText.enableWordWrapping = false; 
+                dropdownMicrofono.itemText.overflowMode = TextOverflowModes.Ellipsis; 
+            }
+            if (dropdownMicrofono.captionText != null) 
+            { 
+                dropdownMicrofono.captionText.enableWordWrapping = false; 
+                dropdownMicrofono.captionText.overflowMode = TextOverflowModes.Ellipsis; 
+            }
+
             dropdownMicrofono.ClearOptions();
             System.Collections.Generic.List<string> opcionesMicrofono = new System.Collections.Generic.List<string>();
             string[] dispositivosMic = Microphone.devices;
