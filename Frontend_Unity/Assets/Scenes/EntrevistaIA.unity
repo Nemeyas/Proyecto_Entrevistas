@@ -10171,6 +10171,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: af4ff303df60f8642a3b1e86e609428d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EntrevistadorAnimator
+  duracionGesto: 0.4
+  velocidadTransicion: 0.15
+  triggersAprobacion:
+  - Aprobar
+  - Aprobar2
+  - Aprobar3
+  triggersDesaprobacion:
+  - Desaprobar
+  - Desaprobar2
+  - Desaprobar3
+  - Desaprobar4
+  huezoCabeza: {fileID: 0}
+  objetivoMirada: {fileID: 0}
+  porcentajeMirada: 0.8
+  pesoMirada: 0.6
+  suavizadoMirada: 3
 --- !u!4 &1437705747 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 7d2aae42b6f859e4394c93d88f9594fb, type: 3}
@@ -10732,6 +10748,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: af4ff303df60f8642a3b1e86e609428d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EntrevistadorAnimator
+  duracionGesto: 0.4
+  velocidadTransicion: 0.15
+  triggersAprobacion:
+  - Aprobar
+  - Aprobar2
+  - Aprobar3
+  triggersDesaprobacion:
+  - Desaprobar
+  - Desaprobar2
+  - Desaprobar3
+  - Desaprobar4
+  huezoCabeza: {fileID: 0}
+  objetivoMirada: {fileID: 0}
+  porcentajeMirada: 0.8
+  pesoMirada: 0.6
+  suavizadoMirada: 3
 --- !u!95 &1501757779
 Animator:
   serializedVersion: 7

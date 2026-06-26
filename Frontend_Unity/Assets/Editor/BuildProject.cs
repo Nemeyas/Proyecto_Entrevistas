@@ -43,6 +43,26 @@ public class BuildProject
         {
             Debug.Log($"[BuildProject] ¡Compilación exitosa! Tamaño: {resultado.summary.totalSize / (1024 * 1024)} MB");
             Debug.Log($"[BuildProject] Ejecutable en: {rutaSalida}");
+
+            // Copiar MESA DEFINITIVA.png a la carpeta EntrevistaIA_Data del build
+            string origenMesa = Path.Combine(Application.dataPath, "MESA DEFINITIVA.png");
+            string destinoMesa = Path.Combine(carpetaBuild, "EntrevistaIA_Data", "MESA DEFINITIVA.png");
+            if (File.Exists(origenMesa))
+            {
+                try
+                {
+                    File.Copy(origenMesa, destinoMesa, true);
+                    Debug.Log($"[BuildProject] Copiada MESA DEFINITIVA.png a {destinoMesa}");
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError($"[BuildProject] Error al copiar MESA DEFINITIVA.png: {e.Message}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[BuildProject] No se encontro MESA DEFINITIVA.png en {origenMesa}");
+            }
         }
         else
         {

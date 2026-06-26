@@ -337,8 +337,9 @@ async def procesar_audio(audio: UploadFile = File(...), id_simulacion: int = For
             3. Sé conciso, máximo 3 o 4 líneas.
             4. FORMATO OBLIGATORIO: Debes responder ÚNICAMENTE con un JSON válido, sin formato markdown, con dos claves:
                - "respuesta": Tu texto de respuesta para el candidato.
-               - "animacion": Elige una de estas opciones según tu respuesta: "idle", "talking", "laughing", "clap".
-            Ejemplo: {{"respuesta": "Excelente respuesta, me gusta tu enfoque.", "animacion": "clap"}}
+               - "animacion": Elige una de estas opciones según tu respuesta: "idle", "talking", "laughing", "clap", "approval", "disapproval".
+                 *REGLA DE EXPRESIVIDAD:* Sé muy expresivo corporalmente. Si lo que dice el candidato es correcto, demuestra buena actitud o responde bien técnicamente, prioriza usar "approval". Si el candidato duda, responde de forma deficiente, se contradice o evade el tema, prioriza usar "disapproval". Usa "talking" solo cuando la interacción sea completamente neutra o puramente informativa.
+            Ejemplo: {{"respuesta": "Excelente respuesta, me gusta tu enfoque.", "animacion": "approval"}}
             """
             
             # Llamada al modelo con reintentos automáticos

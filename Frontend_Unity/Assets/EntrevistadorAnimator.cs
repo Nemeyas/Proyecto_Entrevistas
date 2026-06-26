@@ -24,6 +24,13 @@ public class EntrevistadorAnimator : MonoBehaviour
     [Tooltip("Velocidad de transición suave de vuelta a Idle")]
     public float velocidadTransicion = 0.15f;
 
+    [Header("Variedad de Animaciones (Aleatorias)")]
+    [Tooltip("Lista de triggers de aprobación en el Animator (ej: Aprobar, Aprobar2, Aprobar3). Se elegirá uno al azar.")]
+    public string[] triggersAprobacion = new string[] { "Aprobar" };
+
+    [Tooltip("Lista de triggers de desaprobación en el Animator (ej: Desaprobar, Desaprobar2). Se elegirá uno al azar.")]
+    public string[] triggersDesaprobacion = new string[] { "Desaprobar" };
+
     // Control de mirada hacia la persona (cámara)
     [Header("Seguimiento de Mirada")]
     [Tooltip("Transform de la cabeza del modelo (asignar en Inspector)")]
@@ -140,21 +147,17 @@ public class EntrevistadorAnimator : MonoBehaviour
     }
 
     /// <summary>
-    /// Recibe la emoción del candidato. En esta versión simplificada,
-    /// solo hace un gesto sutil sin importar la emoción.
-    /// El entrevistador se mantiene sereno y en Idle.
+    /// Recibe la emoción del candidato. En esta versión no realiza acciones visibles para evitar distracciones.
     /// </summary>
     public void ReaccionarAEmocion(string emocion)
     {
-        // En la versión simplificada no reacciona visiblemente a emociones.
         // Solo logea para debug.
         Debug.Log($"[Entrevistador] Emocion detectada (sin reaccion visible): {emocion}");
     }
 
     /// <summary>
     /// Ejecuta una animación solicitada por la IA.
-    /// En esta versión simplificada, todas las solicitudes resultan en un gesto sutil
-    /// que rápidamente vuelve a Idle (respiración).
+    /// Las animaciones "approval" y "disapproval" se reproducen usando triggers de Unity.
     /// </summary>
     public void EjecutarAnimacionIA(string animacion)
     {
@@ -164,15 +167,52 @@ public class EntrevistadorAnimator : MonoBehaviour
 
         if (anim == "idle")
         {
-            // Si piden idle explícitamente, quedarse en idle sin gesto
             VolverAIdleInmediato();
             Debug.Log("[Entrevistador] Solicitado: Idle");
         }
+        else if (anim == "approval" || anim == "ducking" || anim == "aprobacion")
+        {
+            if (animator != null && triggersAprobacion != null && triggersAprobacion.Length > 0)
+            {
+                DetenerGestoSutil();
+                string triggerElegido = triggersAprobacion[Random.Range(0, triggersAprobacion.Length)];
+                animator.SetTrigger(triggerElegido);
+                Debug.Log($"[Entrevistador] Animación de aprobación al azar: {triggerElegido}");
+            }
+        }
+        else if (anim == "disapproval" || anim == "desaprobacion" || anim == "angry")
+        {
+            if (animator != null && triggersDesaprobacion != null && triggersDesaprobacion.Length > 0)
+            {
+                DetenerGestoSutil();
+                string triggerElegido = triggersDesaprobacion[Random.Range(0, triggersDesaprobacion.Length)];
+                animator.SetTrigger(triggerElegido);
+                Debug.Log($"[Entrevistador] Animación de desaprobación al azar: {triggerElegido}");
+            }
+        }
         else
         {
-            // Cualquier otra animación → gesto sutil y de vuelta a idle
+            // Cualquier otra animación (como talking, laughing, clap, etc.) realiza el gesto sutil acelerando el Idle
             RealizarGestoSutil();
-            Debug.Log($"[Entrevistador] Gesto sutil por solicitud: {animacion}");
+            Debug.Log($"[Entrevistador] Gesto sutil por solicitud de animación: {animacion}");
+        }
+    }
+
+    /// <summary>
+    /// Cancela cualquier gesto sutil en curso y restaura la velocidad original del animator
+    /// antes de ejecutar una animación completa.
+    /// </summary>
+    private void DetenerGestoSutil()
+    {
+        if (corutinaGesto != null)
+        {
+            StopCoroutine(corutinaGesto);
+            corutinaGesto = null;
+        }
+
+        if (animator != null)
+        {
+            animator.speed = 1f;
         }
     }
 
