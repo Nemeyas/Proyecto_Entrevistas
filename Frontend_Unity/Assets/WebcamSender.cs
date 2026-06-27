@@ -44,6 +44,7 @@ public class WebcamSender : MonoBehaviour
     public TextMeshProUGUI textoDelBoton; 
     private AudioClip clipGrabado;
     private bool estaGrabando = false;
+    private int lastClickFrame = -1;
     
     public GestorChat miGestorDeChat;
     public EntrevistadorAnimator miEntrevistadorAnimator;
@@ -53,6 +54,12 @@ public class WebcamSender : MonoBehaviour
     private bool procesandoPeticion = false;
     public GameObject botonFinalizar;
     public Button botonSalirPrematuro;
+    
+    [Header("Desvanecimiento de Interfaz Pasiva")]
+    public Button botonHablar;
+    public GameObject spinnerCarga;
+    public GameObject panelBloqueoSpam;
+    private CanvasGroup buttonCanvasGroup;
     
     // --- Selección de Dispositivos ---
     public TMP_Dropdown dropdownCamara;
@@ -88,6 +95,7 @@ public class WebcamSender : MonoBehaviour
         
         PoblarDispositivos();
         ReemplazarMesa();
+        InicializarControlesUI();
     }
 
     void ReemplazarMesa()
@@ -414,6 +422,8 @@ public class WebcamSender : MonoBehaviour
     public void AlternarGrabacion()
     {
         if (procesandoPeticion) return; // BLOQUEO DE UI
+        if (UnityEngine.Time.frameCount == lastClickFrame) return; // Evitar doble ejecución en el mismo frame
+        lastClickFrame = UnityEngine.Time.frameCount;
 
         if (!estaGrabando)
         {
@@ -451,6 +461,8 @@ public class WebcamSender : MonoBehaviour
             
             textoDelBoton.text = "⏳ Enviando...";
             textoDelBoton.color = Color.yellow;
+            
+            SetBotonCargando(true); // Activa opacidad 50%, spinner y bloqueo anti-spam
             
             StartCoroutine(EnviarAudioAlServidor());
         }
@@ -518,6 +530,7 @@ public class WebcamSender : MonoBehaviour
                             yield return new WaitForSeconds(2f); // Dar tiempo a leer la despedida
                             FinalizarEntrevista();
                         }
+                        SetBotonCargando(false); // RESTAURAR ESTADOS DE BOTÓN Y BLOQUEO
                         procesandoPeticion = false; // DESBLOQUEO DE UI
                         yield break;
                     }
@@ -533,6 +546,7 @@ public class WebcamSender : MonoBehaviour
 
             textoDelBoton.text = "Hablar";
             textoDelBoton.color = Color.black;
+            SetBotonCargando(false); // RESTAURAR ESTADOS DE BOTÓN Y BLOQUEO
             procesandoPeticion = false; // DESBLOQUEO DE UI
         }
     }
@@ -770,4 +784,197 @@ public class WebcamSender : MonoBehaviour
             }
         }
     }
+
+    private void InicializarControlesUI()
+    {
+        if (botonHablar == null)
+        {
+            GameObject canvasGO = GameObject.Find("Canvas");
+            if (canvasGO != null)
+            {
+                Button[] buttons = canvasGO.GetComponentsInChildren<Button>(true);
+                foreach (var btn in buttons)
+                {
+                    if (btn.name == "BotonHablar")
+                    {
+                        botonHablar = btn;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (botonHablar != null)
+        {
+            botonHablar.onClick.RemoveAllListeners();
+            botonHablar.onClick.AddListener(() => {
+                AlternarGrabacion();
+            });
+
+            // Agregar/Obtener CanvasGroup para el fading pasivo
+            buttonCanvasGroup = botonHablar.gameObject.GetComponent<CanvasGroup>();
+            if (buttonCanvasGroup == null)
+            {
+                buttonCanvasGroup = botonHablar.gameObject.AddComponent<CanvasGroup>();
+            }
+
+            // Configurar el Spinner de Carga si es nulo
+            if (spinnerCarga == null)
+            {
+                Transform childSpinner = botonHablar.transform.Find("SpinnerCarga");
+                if (childSpinner != null)
+                {
+                    spinnerCarga = childSpinner.gameObject;
+                }
+                else
+                {
+                    GameObject spinnerGO = new GameObject("SpinnerCarga");
+                    spinnerGO.transform.SetParent(botonHablar.transform, false);
+
+                    RectTransform rt = spinnerGO.AddComponent<RectTransform>();
+                    rt.sizeDelta = new Vector2(40f, 40f);
+                    rt.anchoredPosition = Vector2.zero;
+
+                    spinnerGO.AddComponent<CanvasRenderer>();
+                    Image img = spinnerGO.AddComponent<Image>();
+                    
+                    Texture2D spinnerTex = CreateSpinnerTexture(128);
+                    Sprite spinnerSprite = Sprite.Create(spinnerTex, new Rect(0, 0, 128, 128), new Vector2(0.5f, 0.5f));
+                    img.sprite = spinnerSprite;
+                    img.color = Color.white;
+
+                    spinnerGO.AddComponent<UISpinner>();
+                    spinnerCarga = spinnerGO;
+                }
+            }
+
+            if (spinnerCarga != null)
+            {
+                spinnerCarga.SetActive(false);
+            }
+        }
+
+        // Configurar el panel de bloqueo anti-spam si es nulo
+        if (panelBloqueoSpam == null)
+        {
+            GameObject goBlock = GameObject.Find("PanelBloqueoSpam");
+            if (goBlock != null)
+            {
+                panelBloqueoSpam = goBlock;
+            }
+            else
+            {
+                Canvas canvas = null;
+                GameObject canvasGO = GameObject.Find("Canvas");
+                if (canvasGO != null) canvas = canvasGO.GetComponent<Canvas>();
+                if (canvas == null) canvas = FindFirstObjectByType<Canvas>();
+
+                if (canvas != null)
+                {
+                    GameObject blockerGO = new GameObject("PanelBloqueoSpam");
+                    blockerGO.transform.SetParent(canvas.transform, false);
+                    blockerGO.transform.SetAsLastSibling();
+
+                    RectTransform rt = blockerGO.AddComponent<RectTransform>();
+                    rt.anchorMin = Vector2.zero;
+                    rt.anchorMax = Vector2.one;
+                    rt.sizeDelta = Vector2.zero;
+                    rt.anchoredPosition = Vector2.zero;
+
+                    blockerGO.AddComponent<CanvasRenderer>();
+                    Image img = blockerGO.AddComponent<Image>();
+                    img.color = new Color(0f, 0f, 0f, 0.15f);
+                    img.raycastTarget = true;
+
+                    panelBloqueoSpam = blockerGO;
+                }
+            }
+        }
+
+        if (panelBloqueoSpam != null)
+        {
+            panelBloqueoSpam.SetActive(false);
+        }
+    }
+
+    private Texture2D CreateSpinnerTexture(int size)
+    {
+        Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        Color transparent = new Color(0f, 0f, 0f, 0f);
+        Vector2 center = new Vector2(size / 2f, size / 2f);
+        float outerRadius = size / 2f;
+        float innerRadius = size / 3.5f;
+        float smoothness = 1.0f;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                Vector2 pos = new Vector2(x + 0.5f, y + 0.5f);
+                float dist = Vector2.Distance(pos, center);
+
+                float outerEdge = Mathf.Clamp01((outerRadius - dist) / smoothness);
+                float innerEdge = Mathf.Clamp01((dist - innerRadius) / smoothness);
+                float mask = outerEdge * innerEdge;
+
+                if (mask > 0.01f)
+                {
+                    float angle = Mathf.Atan2(y - center.y, x - center.x) * Mathf.Rad2Deg;
+                    if (angle < 0) angle += 360f;
+
+                    if (angle <= 270f)
+                    {
+                        float alpha = (angle / 270f) * mask;
+                        tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                    }
+                    else
+                    {
+                        float angleDiff = angle - 270f;
+                        if (angleDiff < 15f)
+                        {
+                            float alpha = (1f - (angleDiff / 15f)) * mask;
+                            tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha * 0.05f));
+                        }
+                        else
+                        {
+                            tex.SetPixel(x, y, transparent);
+                        }
+                    }
+                }
+                else
+                {
+                    tex.SetPixel(x, y, transparent);
+                }
+            }
+        }
+        tex.Apply();
+        return tex;
+    }
+
+    private void SetBotonCargando(bool cargando)
+    {
+        if (cargando)
+        {
+            if (botonHablar != null) botonHablar.interactable = false;
+            if (buttonCanvasGroup != null)
+            {
+                buttonCanvasGroup.alpha = 0.5f;
+            }
+            if (textoDelBoton != null) textoDelBoton.gameObject.SetActive(false);
+            if (spinnerCarga != null) spinnerCarga.SetActive(true);
+            if (panelBloqueoSpam != null) panelBloqueoSpam.SetActive(true);
+        }
+        else
+        {
+            if (botonHablar != null) botonHablar.interactable = true;
+            if (buttonCanvasGroup != null)
+            {
+                buttonCanvasGroup.alpha = 1.0f;
+            }
+            if (textoDelBoton != null) textoDelBoton.gameObject.SetActive(true);
+            if (spinnerCarga != null) spinnerCarga.SetActive(false);
+            if (panelBloqueoSpam != null) panelBloqueoSpam.SetActive(false);
+        }
+    }
+
 }
